@@ -42,59 +42,6 @@ from scipy import spatial
 from src.utilities.Database_Helpers import *
 
 
-
-
-
-
-
-# def vertex_rotation_matrix(theta_deg):
-#     theta_rad = np.deg2rad(theta_deg)
-#     return np.matrix([
-#         [np.cos(theta_rad), -np.sin(theta_rad)],
-#         [np.sin(theta_rad), np.cos(theta_rad)]
-#     ])
-
-# Project collection of input polygons, in degrees, centered at the origin, of form:
-#    [
-#      (ra_1, dec_1), (ra_2, dec_2), ... (ra_N, dec_N)
-#    ]
-# to desired RA/Dec (ra_0, dec_0), and rotate by theta_0 degrees. Return projected polygon.
-# def project_vertices(input_polygon_list, ra_0, dec_0, theta_0):
-#
-#     output_list = []
-#
-#     for vertex_collection in input_polygon_list:
-#         # rotation matrix is before vector to reverse the rotation -- Position Angle is defined as degrees East of North
-#         rotated = list(map(tuple, map(lambda vertex: np.asarray(vertex_rotation_matrix(theta_0) @ vertex)[0], vertex_collection)))
-#         translated = list(map(lambda vertex: (vertex[0] + ra_0, vertex[1] + dec_0), rotated))
-#
-#         output_list.append(translated)
-#
-#     return output_list
-
-# def generate_mysql_multipolygon_string_from_shapely_poly(input_shapely_poly):
-#     mp_str = "MULTIPOLYGON("
-#     multipolygon = []
-#     for geom in input_shapely_poly:
-#
-#         mp = "(("
-#         ra_deg, dec_deg = zip(*[(coord_deg[0], coord_deg[1]) for coord_deg in geom.exterior.coords])
-#
-#         # For the SRS in the DB, we need to emulate lat,lon
-#         for i in range(len(ra_deg)):
-#             mp += "%s %s," % (dec_deg[i], ra_deg[i] - 180.0)
-#
-#         mp = mp[:-1]  # trim the last ","
-#         mp += ")),"
-#         multipolygon.append(mp)
-#
-#     # Use the multipolygon string to create the WHERE clause
-#     multipolygon[-1] = multipolygon[-1][:-1]  # trim the last "," from the last object
-#
-#     for mp in multipolygon:
-#         mp_str += mp
-#     mp_str += ")"
-
 class Detector(Teglon_Shape):
 
     # returns a collection of N=len(resolution) vertex polygon, in degrees, centered at the origin, and
@@ -104,35 +51,7 @@ class Detector(Teglon_Shape):
     #    ]
     @staticmethod
     def get_detector_vertices_circular(deg_radius, resolution=50):
-
-        # q1 = []
-        # q2 = []
-        # q3 = []
-        # q4 = []
-        #
-        # x_range = np.linspace(0.0, deg_radius, resolution)
-        # y_range = np.sqrt(np.full_like(x_range, 1.0) * deg_radius ** 2.0 - x_range[::-1] ** 2.0)
-        #
-        # # traversing clockwise through cartesian quadrants
-        # for x, y in zip(x_range, y_range[::-1]):
-        #     q1.append((x, y))
-        #
-        # for x, y in zip(x_range[::-1], -1.0 * y_range):
-        #     q4.append((x, y))
-        #
-        # for x, y in zip(-1.0 * x_range, -1.0 * y_range[::-1]):
-        #     q3.append((x, y))
-        #
-        # for x, y in zip(-1.0 * x_range[::-1], y_range):
-        #     q2.append((x, y))
-        #
-        # clockwise_vertices = q1 + q4 + q3 + q2 + [q1[0]]
-        #
-        # return np.asarray([np.asarray(clockwise_vertices)])
-
         c1 = Point(0, 0).buffer(deg_radius)
-        # c2 = shapely_transform(lambda x, y, z=None: ((self.ra_deg - (self.ra_deg - x) /
-        #                                               np.abs(np.cos(np.radians(y)))), y), c1)
 
         # clip the last 2 coords off to protect against degenerate corners
         return np.asarray([np.asarray([(c[0], c[1]) for c in c1.exterior.coords[:-2]])])
@@ -263,7 +182,6 @@ class Detector(Teglon_Shape):
             running_area += p.area
         self.area = running_area
         self.__radius_proxy = np.sqrt(self.area/np.pi)
-
 
     @property
     def radius_proxy(self):

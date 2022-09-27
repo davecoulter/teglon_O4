@@ -193,68 +193,6 @@ class Teglon:
                 d1 = d2
             return sky_distances
 
-        def plot_completeness(d1, d2, pixels, pixel_outline, file_name):
-            lon0 = 180.0
-            fig = plt.figure(figsize=(8, 8), dpi=180)
-            ax = fig.add_subplot(111)
-            m = Basemap(projection='moll', lon_0=lon0)
-
-            norm = colors.Normalize(0.0, 1.0)
-
-            values = []
-            for p in pixels:
-                pprob = p.prob
-                if p.prob <= 0.0:
-                    pprob = 0.0
-                elif p.prob > 1.0:
-                    pprob = 1.0
-
-                values.append(pprob)
-
-            for i, p in enumerate(pixels):
-                p.plot(m, ax, facecolor=plt.cm.viridis(values[i]), edgecolor='None', linewidth=0.5, alpha=0.8,
-                       zorder=9900)
-
-            for p in pixel_outline:
-                p.plot(m, ax, facecolor='None', edgecolor='k', linewidth=0.5)
-
-            meridians = np.arange(0., 360., 60.)
-            m.drawparallels(np.arange(-90., 91., 30.), fontsize=14, labels=[True, True, False, False], dashes=[2, 2],
-                            linewidth=0.5, xoffset=2500000)
-            m.drawmeridians(meridians, labels=[False, False, False, False], dashes=[2, 2], linewidth=0.5)
-
-            for mer in meridians[1:]:
-                plt.annotate("%0.0f" % mer, xy=m(mer, 0), xycoords='data', fontsize=14, zorder=9999)
-
-            sm = plt.cm.ScalarMappable(norm=norm, cmap=plt.cm.viridis)
-            sm.set_array([])  # can be an empty list
-
-            tks = np.linspace(0.0, 1.0, 11)
-            tks_strings = []
-
-            for t in tks:
-                tks_strings.append('%0.0f' % (t * 100))
-
-            top_left = 1.05
-            delta_y = 0.04
-            ax.annotate('[%0.0f - %0.0f] Mpc' % (d1, d2), xy=(0.5, top_left), xycoords='axes fraction', fontsize=16,
-                        ha='center')
-
-            cb = fig.colorbar(sm, ax=ax, ticks=tks, orientation='horizontal', fraction=0.08951, pad=0.02, alpha=0.80)
-            cb.ax.set_xticklabels(tks_strings, fontsize=14)
-            cb.set_label("% Complete per Pixel", fontsize=14, labelpad=10.0)
-            cb.outline.set_linewidth(1.0)
-
-            for axis in ['top', 'bottom', 'left', 'right']:
-                ax.spines[axis].set_linewidth(2.0)
-
-            ax.invert_xaxis()
-
-            fig.savefig(file_name, bbox_inches='tight')  # ,dpi=840
-            plt.close('all')
-
-            print("... %s Done." % file_name)
-
         ################################################
 
         if not self.options.build_skydistances:
@@ -300,7 +238,7 @@ class Teglon:
         if not self.options.build_skypixels:
             print("Skipping Sky Pixels...")
             print("\tLoading existing pixels...")
-            with open('sky_pixels.pkl', 'rb') as handle:
+            with open('./pickles/sky_pixels.pkl', 'rb') as handle:
                 sky_pixels = pickle.load(handle)
         else:
             ## Build Sky Pixel Objects ##
@@ -375,55 +313,12 @@ class Teglon:
 
                 sky_pixels[p_nside][p_index].id = db_id
 
-            with open('sky_pixels.pkl', 'wb') as handle:
+            with open('./pickles/sky_pixels.pkl', 'wb') as handle:
                 pickle.dump(sky_pixels, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-            if self.options.is_debug:
-                print("\n\nTest pixel parent-child relationships...")
-                # Pick a random nside32 pixel and plot all of its parents
-                test_index = 110435
-                print("Plotting n128 index[%s]" % test_index)
-                n128 = sky_pixels[nside128][test_index]
-                n64 = n128.parent_pixel
-                n32 = n64.parent_pixel
-                n16 = n32.parent_pixel
-                n8 = n16.parent_pixel
-                n4 = n8.parent_pixel
-                n2 = n4.parent_pixel
-
-
-                lon0=180.0
-                fig = plt.figure(figsize=(10,10), dpi=300)
-                ax = fig.add_subplot(111)
-                m = Basemap(projection='moll',lon_0=lon0)
-
-                n2.plot(m, ax, facecolor='blue', edgecolor='blue', linewidth=0.5)
-                n4.plot(m, ax, facecolor='red', edgecolor='red', linewidth=0.5)
-                n8.plot(m, ax, facecolor='green', edgecolor='green', linewidth=0.5)
-                n16.plot(m, ax, facecolor='magenta', edgecolor='magenta', linewidth=0.5)
-                n32.plot(m, ax, facecolor='orange', edgecolor='orange', linewidth=0.5)
-                n64.plot(m, ax, facecolor='pink', edgecolor='pink', linewidth=0.5)
-                n128.plot(m, ax, facecolor='cyan', edgecolor='cyan', linewidth=0.5)
-
-                meridians = np.arange(0.,360.,60.)
-                m.drawparallels(np.arange(-90.,91.,30.),fontsize=14,labels=[True,True,False,False],dashes=[2,2],linewidth=0.5, xoffset=2500000)
-                m.drawmeridians(meridians,labels=[False,False,False,False],dashes=[2,2],linewidth=0.5)
-
-                for mer in meridians[1:]: # np.str(mer)
-                    plt.annotate("%0.0f" % mer,xy=m(mer,0),xycoords='data', fontsize=14, zorder=9999)
-
-                for axis in ['top','bottom','left','right']:
-                    ax.spines[axis].set_linewidth(2.0)
-
-                ax.invert_xaxis()
-
-                fig.savefig('Pixel_Relation_Check.png', bbox_inches='tight') #,dpi=840
-                plt.close('all')
-
-                print("... Done.")
 
         ################################################
 
+        # region manual detector definitions
         swope_deg_width = 4096*0.435/3600.
         swope_deg_height = 4112*0.435/3600.
         swope_max_dec = 30.0
@@ -459,7 +354,15 @@ class Teglon:
         sinistro_max_dec = 90.0
         sinistro_min_dec = -90.0
 
+        _2df_deg_radius = 1.05
+        _2df_max_dec = 30.0
+        _2df_min_dec = -90.0
 
+        WISE_deg_width = 0.94833333333
+        WISE_deg_height = 0.94833333333
+        WISE_max_dec = 90.0
+        WISE_min_dec = -30.0
+        # endregion
         if not self.options.build_detectors:
             print("Skipping Detectors...")
         else:
@@ -473,7 +376,9 @@ class Teglon:
                 ("NICKEL", nickel_deg_width, nickel_deg_height, None, nickel_deg_width*nickel_deg_height, nickel_min_dec, nickel_max_dec),
                 ("MOSFIRE", mosfire_deg_width, mosfire_deg_height, None, mosfire_deg_width * mosfire_deg_height, mosfire_min_dec, mosfire_max_dec),
                 ("KAIT", kait_deg_width, kait_deg_height, None, kait_deg_width * kait_deg_height, kait_min_dec, kait_max_dec),
-                ("SINISTRO", sinistro_deg_width, sinistro_deg_height, None, sinistro_deg_width * sinistro_deg_height, sinistro_min_dec, sinistro_max_dec)
+                ("SINISTRO", sinistro_deg_width, sinistro_deg_height, None, sinistro_deg_width * sinistro_deg_height, sinistro_min_dec, sinistro_max_dec),
+                ("2dF", None, None, _2df_deg_radius, np.pi*_2df_deg_radius**2, _2df_min_dec, _2df_max_dec),
+                ("WISE", WISE_deg_width, WISE_deg_height, None, WISE_deg_width * WISE_deg_height, WISE_min_dec, WISE_max_dec)
             ]
 
             detector_insert = "INSERT INTO Detector (Name, Deg_width, Deg_height, Deg_radius, Area, MinDec, MaxDec) VALUES (%s, %s, %s, %s, %s, %s, %s);"
@@ -665,7 +570,7 @@ class Teglon:
         if not self.options.build_MWE:
             print("Skipping MWE...")
             print("\tLoading existing EBV...")
-            with open('ebv.pkl', 'rb') as handle:
+            with open('./pickles/ebv.pkl', 'rb') as handle:
                 ebv = pickle.load(handle)
         else:
             ## Build E(B-V) Map ##
@@ -703,48 +608,8 @@ class Teglon:
 
             batch_insert(mwe_insert, mwe_data)
 
-            with open('ebv.pkl', 'wb') as handle:
+            with open('./pickles/ebv.pkl', 'wb') as handle:
                 pickle.dump(ebv, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-            # Debug plot of of MWE
-            if self.options.plot_MWE:
-                print("Plotting MWE E(B-V) extinction...")
-
-                lon0=180.0
-                fig = plt.figure(figsize=(10,10), dpi=300)
-                ax = fig.add_subplot(111)
-                m = Basemap(projection='moll',lon_0=lon0)
-
-                norm = colors.LogNorm(min_ebv, max_ebv)
-                for i, (pi,pe) in enumerate(sky_pixels[nside128].items()):
-                    pe.plot(m, ax, facecolor=plt.cm.inferno(norm(ebv[i])), edgecolor=plt.cm.inferno(norm(ebv[i])), linewidth=0.5, alpha=0.8, zorder=9900)
-
-                meridians = np.arange(0.,360.,60.)
-                m.drawparallels(np.arange(-90.,91.,30.),fontsize=14,labels=[True,True,False,False],dashes=[2,2],linewidth=0.5, xoffset=2500000)
-                m.drawmeridians(meridians,labels=[False,False,False,False],dashes=[2,2],linewidth=0.5)
-
-                for mer in meridians[1:]:
-                    plt.annotate("%0.0f" % mer,xy=m(mer,0),xycoords='data', fontsize=14, zorder=9999)
-
-                sm = plt.cm.ScalarMappable(norm=norm, cmap=plt.cm.inferno)
-                sm.set_array([]) # can be an empty list
-
-                tks = np.logspace(np.log10(min_ebv), np.log10(max_ebv), 11)
-                tks_strings = []
-                for t in tks:
-                    tks_strings.append('%0.2f' % t)
-
-                cb = fig.colorbar(sm, ax=ax, ticks=tks, orientation='horizontal', fraction=0.08951, pad=0.02, alpha=0.80)
-                cb.ax.set_xticklabels(tks_strings, fontsize=10)
-                cb.set_label("E(B-V) per pixel", fontsize=14, labelpad=10.0)
-                cb.outline.set_linewidth(1.0)
-
-                for axis in ['top','bottom','left','right']:
-                    ax.spines[axis].set_linewidth(2.0)
-                ax.invert_xaxis()
-
-                fig.savefig("MWE_Debug_Plot.png", bbox_inches='tight')
-                plt.close('all')
 
         ################################################
 
@@ -835,7 +700,6 @@ class Teglon:
             #     print("\n\n Batch INSERT (%s) records..." % len(galaxy_association_data))
             #     batch_insert(galaxy_association_insert, galaxy_association_data)
 
-        # raise Exception("Stop!")
         ################################################
 
         if not self.options.build_completeness:
@@ -862,36 +726,6 @@ class Teglon:
                 ORDER BY sp.id, d.D1;
             '''
 
-            sky_completeness_select = '''
-                SELECT 
-                    d.id as SkyDistance_id, 
-                    sp.id as SkyPixel_id,
-                    d.D1, 
-                    d.D2, 
-                    SUM(POW(10,-0.4*((g.B - (5*log10(g.z_dist*1e+6)-5)) - %s))/1e+10) as L10, 
-                    SUM(POW(10,-0.4*((g.B - (5*log10(g.z_dist*1e+6)-5)) - %s))/1e+10)/d.Sch_L10 as Completeness 
-                FROM Galaxy g 
-                JOIN SkyPixel_Galaxy sp_g on sp_g.Galaxy_id = g.id 
-                JOIN SkyPixel sp on sp.id = sp_g.SkyPixel_id 
-                JOIN SkyDistance d on d.NSIDE = sp.NSIDE 
-                WHERE sp.NSIDE = %s and sp.Pixel_Index = %s and g.z_dist BETWEEN d.D1 and d.D2 
-                GROUP BY SkyDistance_id, SkyPixel_id, d.D1, d.D2 
-                ORDER BY d.D1
-            '''
-
-            sky_distance_select = '''
-                SELECT 
-                    id, 
-                    D1, 
-                    D2, 
-                    dCoV, 
-                    Sch_L10, 
-                    NSIDE 
-                FROM SkyDistance 
-                WHERE NSIDE = %s 
-                ORDER BY D1
-            '''
-
             sky_distance_select2 = '''
                 SELECT 
                     id, 
@@ -911,22 +745,7 @@ class Teglon:
 
             tstart = time.time()
 
-            # Get Sky Distances by NSIDE
             sky_distances = batch_query([sky_distance_select2])[0]
-            # distance_result_result = []
-            # for sd in sky_distances:
-            #     sd_id = sd[0]
-            #     sd_d1 = sd[1]
-            #     sd_d2 = sd[2]
-            #     sd_dCov = sd[3]
-            #     sd_Sch_L10 = sd[4]
-            #     sd_nside = sd[5]
-            #
-            #
-            #     distance_result_result.append((sd_id, sd))
-            # query_db(queries_to_exe, commit=True)
-
-            completeness_queries = []
             smoothing_radius_Mpc = 30.0  # Mpc
             for sd_index, d in enumerate(sky_distances):
 
@@ -979,232 +798,6 @@ class Teglon:
 
                 batch_insert(sky_completeness_insert, insert_completeness_data)
 
-                if self.options.plot_completeness:
-                    file_base_name = 'SmoothedCompletenessPlots/sky_completeness_%s.png' % str(sd_index).zfill(3)
-                    print("\tPlot [%0.2f to %0.2f] ..." % (d_d1, d_d2))
-                    pix = []
-                    for pix_key, pix_value in current_completenesses.items():
-                        pix.append(Pixel_Element(pix_key, d_NSIDE, pix_value[4]))
-                    plot_completeness(d_d1, d_d2, pix, pix, file_base_name)
-
-                    completeness_end = time.time()
-                    completeness_duration = (completeness_end - completeness_start)
-                    print("\n**** Done with Completeness Slice %s/%s - time: %s [sec] ****\n" %
-                          (curr_iter, len(sky_distances), completeness_duration))
-
-                    # d.id as SkyDistance_id,
-                    # sp.id as SkyPixel_id,
-                    # d.D1,
-                    # d.D2,
-                    # SUM(POW(10, -0.4 * ((g.B - (5 * log10(g.z_dist * 1e+6) - 5)) - % s)) / 1e+10) as L10,
-                    # SUM(POW(10, -0.4 * ((g.B - (5 * log10(g.z_dist * 1e+6) - 5)) -
-                    #                     % s)) / 1e+10) / d.Sch_L10 as Completeness
-
-            # raise Exception("Stop!")
-            # return 0
-
-
-
-
-
-
-            ###################
-        #     sky_distance_queries = {}
-        #     completeness_queries = {}
-        #     for nside, pixel_dict in sky_pixels.items():
-        #
-        #         sky_distance_queries[nside] = [sky_distance_select % nside]
-        #         completeness_queries[nside] = []
-        #
-        #         for i, (pi, pe) in enumerate(pixel_dict.items()):
-        #             completeness_queries[nside].append(sky_completeness_select % (solar_B_abs, solar_B_abs, nside, pe.index))
-        #
-        #     sky_completeness_dict = OrderedDict()
-        #     for i, (nside, pixel_dict) in enumerate(sky_pixels.items()):
-        #
-        #         sky_distances = batch_query(sky_distance_queries[nside])[0]
-        #         sky_completeness_per_nside_result = batch_query(completeness_queries[nside])
-        #
-        #         # Initialize the records to 0.0 - not all queries from the db will return results
-        #         for pi, pe in pixel_dict.items():
-        #             sky_completeness_dict[pe.id] = OrderedDict()
-        #
-        #             for sd in sky_distances:
-        #                 sky_completeness_dict[pe.id][sd[0]] = [pe.id, sd[0], 0.0, 0.0, 0.0]
-        #
-        #         # For non-null results, parse and load into dict
-        #         for j, nside_result in enumerate(sky_completeness_per_nside_result):
-        #             for k, sc in enumerate(nside_result):
-        #
-        #                 try:
-        #                     sd_id = sc[0]
-        #                     pe_id = sc[1]
-        #                     d1 = float(sc[2])
-        #                     d2 = float(sc[3])
-        #                     l10 = float(sc[4])
-        #                     comp = float(sc[5])
-        #                 except:
-        #                     test = 1
-        #                     pass
-        #
-        #                 sky_completeness_dict[pe_id][sd_id] = [pe_id, sd_id, l10, comp, 0.0]
-        #
-        #     # HACK -- reconstruct the collections of pixels/completeness by distance slice so we can smooth...
-        #     smoothing_radius_Mpc = 30.0  # Mpc
-        #
-        #     distance_select = '''
-        #             SELECT id, D1, D2, NSIDE FROM SkyDistance
-        #         '''
-        #     distance_result = query_db([distance_select])[0]
-        #     distance_result_dict = {int(dr[0]): dr for dr in distance_result}
-        #
-        #     pixel_select = '''
-        #         SELECT id, Pixel_Index, NSIDE FROM SkyPixel
-        #     '''
-        #     pixel_result = query_db([pixel_select])[0]
-        #     pixel_result_dict = {int(pr[0]): pr for pr in pixel_result}
-        #
-        #     pixels_by_distance_key = {}
-        #     for pixel_id, distance_dict in sky_completeness_dict.items():
-        #         for dist_id, comp_record in distance_dict.items():
-        #
-        #             completeness = float(comp_record[3])
-        #
-        #             pix_record = pixel_result_dict[pixel_id]
-        #             p_index = int(pix_record[1])
-        #             p_nside = int(pix_record[2])
-        #
-        #             if dist_id not in pixels_by_distance_key:
-        #                 pixels_by_distance_key[dist_id] = []
-        #
-        #             pixels_by_distance_key[dist_id].append(
-        #                 Pixel_Element(p_index, p_nside, completeness, pixel_id=pixel_id)
-        #             )
-        #
-        #     for dist_id, pixels in pixels_by_distance_key.items():
-        #
-        #         # Sort pixels by their indices, and keep track of their database ID's in the same order
-        #         sorted_pix = sorted(pixels, key=lambda p: p.index)
-        #         pix_completenesses = [p.prob for p in sorted_pix]
-        #         pix_ids = [p.id for p in sorted_pix]
-        #
-        #         dist_record = distance_result_dict[dist_id]
-        #         d1 = float(dist_record[1])
-        #         d2 = float(dist_record[2])
-        #         avg_dist = (d1 + d2)/2.
-        #
-        #         z = z_at_value(cosmo.luminosity_distance, avg_dist * u.Mpc)
-        #         mpc_radian = cosmo.angular_diameter_distance(z)  # Mpc/radian
-        #         radian_radius = smoothing_radius_Mpc / mpc_radian.value
-        #
-        #         smoothed_completeness = hp.sphtfunc.smoothing(pix_completenesses, fwhm=radian_radius, iter=1)
-        #
-        #         # Update the record with the smoothed value...
-        #         for i, smooth_pix_comp in enumerate(smoothed_completeness):
-        #             pix_id = pix_ids[i]
-        #             sky_completeness_dict[pix_id][dist_id][4] = smooth_pix_comp
-        #
-        #     # Flatten results for INSERT
-        #     completeness_data = []
-        #     for pixel_id, inner_dict in sky_completeness_dict.items():
-        #         for dist_id, values in inner_dict.items():
-        #
-        #             # Multi-inserts require tuples
-        #             v = (values[0], values[1], values[2], values[3], values[4])
-        #             completeness_data.append(v)
-        #
-        #     print("\nInserting %s sky completenesses..." % (len(completeness_data)))
-        #     print("\n\n")
-        #     print(completeness_data)
-        #     batch_insert(sky_completeness_insert, completeness_data)
-        #
-        #     tend = time.time()
-        #     print("\n********* start DEBUG ***********")
-        #     print("Process Completeness Finished - execution time: %s" % (tend - tstart))
-        #     print("********* end DEBUG ***********\n")
-        #
-        # if self.options.plot_completeness:
-        #     sky_distance_select_2 = '''
-        #         SELECT
-        #             id,
-        #             D1,
-        #             D2,
-        #             dCoV,
-        #             Sch_L10,
-        #             NSIDE
-        #         FROM SkyDistance
-        #         ORDER BY D1;
-        #     '''
-        #
-        #     select_completeness = '''
-        #         SELECT
-        #             sc.id,
-        #             sc.SkyPixel_id,
-        #             sc.SkyDistance_id,
-        #             sp.Pixel_Index,
-        #             sd.D1,
-        #             sd.D2,
-        #             sc.Completeness,
-        #             sc.SmoothedCompleteness,
-        #             sp.NSIDE
-        #         FROM SkyCompleteness sc
-        #         JOIN SkyPixel sp on sp.id = sc.SkyPixel_id
-        #         JOIN SkyDistance sd on sd.id = sc.SkyDistance_id
-        #         WHERE sd.id = %s
-        #         ORDER BY sd.D1, sp.Pixel_Index;
-        #     '''
-        #
-        #     # file_base_name = 'CompletenessPlots/sky_completeness_%s.png'
-        #     file_base_name = 'SmoothedCompletenessPlots/sky_completeness_%s.png'
-        #
-        #     print("\nGetting Sky Distances ...")
-        #     sky_dist = query_db([sky_distance_select_2])[0]
-        #     print("... retrieved %s " % len(sky_dist))
-        #
-        #     print("Getting Sky Completenesses ...")
-        #     comp_pix = OrderedDict()
-        #     for i, d in enumerate(sky_dist):
-        #
-        #         dist_id = int(d[0])
-        #         print("\tProcessing dist id: %s" % dist_id)
-        #
-        #         comp_pix[dist_id] = []
-        #         completenesses = query_db([select_completeness % d[0]])[0]
-        #         print("\tretrieved %s completenesses... building pixels" % len(completenesses))
-        #
-        #         for c in completenesses:
-        #             pixel_index = int(c[3])
-        #             smoothed_completeness = float(c[7])
-        #             pixel_nside = int(c[8])
-        #             comp_pix[dist_id].append(Pixel_Element(pixel_index, pixel_nside, smoothed_completeness))
-        #
-        #     print("\nPlotting Sky Completenesses ...")
-        #     this_nside = nside2
-        #     j = 0
-        #     for i, d in enumerate(sky_dist):
-        #
-        #         fname = file_base_name % str(j).zfill(3)
-        #         dist_id = int(d[0])
-        #
-        #         d1 = float(d[1])
-        #         d2 = float(d[2])
-        #         pix = comp_pix[dist_id]
-        #
-        #         print("Plot [%0.2f to %0.2f] ..." % (d1, d2))
-        #
-        #         plot_completeness(d1, d2, pix, pix, fname)
-        #
-        #         next_nside = int(sky_dist[i+1][5])
-        #         if (i+1) < len(sky_dist) and next_nside > this_nside:
-        #             j += 1
-        #             fname = file_base_name % str(j).zfill(3)
-        #             this_nside = next_nside
-        #             plot_completeness(d1, d2, pix, comp_pix[(dist_id+1)], fname)
-        #
-        #         j += 1
-        #
-        #     print("\n... Plots complete")
-
         ################################################
 
         if not self.options.build_static_grids:
@@ -1223,7 +816,7 @@ class Teglon:
             swope_vertices = Detector.get_detector_vertices_from_teglon_db(swope_result[1])
             swope_id = int(swope_result[4])
             swope = Detector(detector_name="SWOPE", detector_vertex_list_collection=swope_vertices,
-                             detector_width_deg=int(swope_result[2]), detector_height_deg=int(swope_result[2]),
+                             detector_width_deg=swope_result[2], detector_height_deg=swope_result[2],
                              detector_id=swope_id)
             swope_coords = Cartographer.generate_all_sky_coords(swope)
             t2 = time.time()
@@ -1236,7 +829,7 @@ class Teglon:
             thacher_vertices = Detector.get_detector_vertices_from_teglon_db(swope_result[1])
             thacher_id = int(thacher_result[4])
             thacher = Detector(detector_name="THACHER", detector_vertex_list_collection=thacher_vertices,
-                             detector_width_deg=int(thacher_result[2]), detector_height_deg=int(thacher_result[2]),
+                             detector_width_deg=thacher_result[2], detector_height_deg=thacher_result[2],
                              detector_id=thacher_id)
             thacher_coords = Cartographer.generate_all_sky_coords(thacher)
             t2 = time.time()
@@ -1247,7 +840,7 @@ class Teglon:
             swope_tiles = []
             t1 = time.time()
             for i, c in enumerate(swope_coords):
-                t = Tile(c[0], c[1], swope.deg_width, swope.deg_height, nside128)
+                t = Tile(c[0], c[1], swope, nside128)
                 t.field_name = "S%s" % str(i).zfill(6)
                 n128_index = hp.ang2pix(nside128, 0.5*np.pi - t.dec_rad, t.ra_rad) # theta, phi
                 t.mwe = ebv[n128_index]
@@ -1262,7 +855,7 @@ class Teglon:
             thacher_tiles = []
             t1 = time.time()
             for i, c in enumerate(thacher_coords):
-                t = Tile(c[0], c[1], thacher.deg_width, thacher.deg_height, nside128)
+                t = Tile(c[0], c[1], thacher, nside128)
                 t.field_name = "T%s" % str(i).zfill(6)
                 n128_index = hp.ang2pix(nside128, 0.5*np.pi - t.dec_rad, t.ra_rad) # theta, phi
                 t.mwe = ebv[n128_index]

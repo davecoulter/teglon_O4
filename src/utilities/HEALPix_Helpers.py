@@ -170,11 +170,9 @@ class Unpacked_Healpix:
         self.Y = Y
         self.Z = Z
 
-
 def invoke_enclosed_pix(tile):
     tile.enclosed_pixel_indices
     return tile
-
 
 def find_nearest(array, value):
     array = np.asarray(array)

@@ -1,0 +1,46 @@
+version: '3.8'
+services:
+    script:
+        container_name: gw_scipt
+#        build: .
+        image: "davecoulter/astromini3:1.5"
+        volumes:
+            - ${VOL_APP}:/app
+            - ${VOL_CDBS}:/cdbs
+        links:
+            - db
+        environment:
+          PYSYN_CDBS: /cdbs/
+          CONDA_DEFAULT_ENV: base
+          _: /opt/conda/bin/python
+          CONDA_EXE: /opt/conda/bin/conda
+          SHLVL: 1
+          CONDA_PYTHON_EXE: /opt/conda/bin/python
+          CONDA_SHLVL: 1
+          CONDA_PROMPT_MODIFIER: (base)
+          PROJ_LIB: /opt/conda/share/proj
+          CONDA_PREFIX: /opt/conda
+        depends_on:
+          db:
+            condition: service_healthy
+    db:
+        container_name: gw_db
+        image: "mysql:8.0.25"
+        ports:
+            - "${LOCAL_DB_PORT}:3306"
+        volumes:
+            - ${VOL_DB}:/var/lib/mysql
+            - ./db_init/db_configuration:/etc/mysql/conf.d
+            - ./db_init/init.sql:/docker-entrypoint-initdb.d/1.sql
+#            - ./db_init/teglon_schema_20220816.sql:/docker-entrypoint-initdb.d/2.sql
+            - ./db_init/teglon_O4.sql:/docker-entrypoint-initdb.d/2.sql
+            - ./db_init/angsep.sql:/docker-entrypoint-initdb.d/3.sql
+            - ./db_init/teglon_users.sql:/docker-entrypoint-initdb.d/4.sql
+            - ${VOL_DB_LOG}:/var/log/mysql
+        environment:
+            MYSQL_ROOT_PASSWORD: ${DB_PWD}
+        healthcheck:
+          test: [ "CMD", "mysqladmin" ,"ping", "-h", "localhost" ]
+          timeout: 20s
+          retries: 10
+#          test: "exit 0"
