@@ -2,4 +2,7 @@
 *.txt
 */SmoothedCompletenessPlots/*
 *.pkl
+*.idea
+__pycache__/
+*.fits
 
