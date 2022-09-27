@@ -317,18 +317,19 @@ class Teglon:
                 print("\tPlot [%0.2f to %0.2f] ..." % (sd_d1, sd_d2))
                 plot_completeness(sd_d1, sd_d2, pixels, pixels, fname)
 
-                next_nside = int(sky_distances[sd_index + 1][3])
-                if (sd_index+1) < len(sky_distances) and next_nside > this_nside:
-                    j += 1
-                    fname = file_base_name % str(j).zfill(3)
-                    this_nside = next_nside
+                # Sanity - if we're at the end, don't do the next thing!
+                if curr_iter < len(sky_distances):
+                    next_nside = int(sky_distances[sd_index + 1][3])
+                    if (sd_index+1) < len(sky_distances) and next_nside > this_nside:
+                        j += 1
+                        fname = file_base_name % str(j).zfill(3)
+                        this_nside = next_nside
 
-                    outline_pixels = []
-                    for sp_key, sp_val in sky_pixels[this_nside].items():
-                        outline_pixels.append(sp_val)
+                        outline_pixels = []
+                        for sp_key, sp_val in sky_pixels[this_nside].items():
+                            outline_pixels.append(sp_val)
 
-                    plot_completeness(sd_d1, sd_d2, pixels, outline_pixels, fname)
-
+                        plot_completeness(sd_d1, sd_d2, pixels, outline_pixels, fname)
                 j += 1
 
                 completeness_end = time.time()
