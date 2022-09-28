@@ -10,9 +10,6 @@ from Database_Helpers import *
 glade_catalog_in = "./galaxy_catalog_files/GLADE_2.4.txt"
 glade_catalog_mid = "./galaxy_catalog_files/GLADE_2.4.mid.txt"
 glade_catalog_out = "./galaxy_catalog_files/GLADE_2.4.out.txt"
-# glade_catalog_in = "./galaxy_catalog_files/GLADE_2.4.small.txt"
-# glade_catalog_mid = "./galaxy_catalog_files/GLADE_2.4.small.mid.txt"
-# glade_catalog_out = "./galaxy_catalog_files/GLADE_2.4.small.out.txt"
 # reset output
 glade_H0 = 70.0
 glade_Om0 = 0.27

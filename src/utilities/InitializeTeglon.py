@@ -100,17 +100,11 @@ class Teglon:
         parser.add_option('--build_MWE', action="store_true", default=False,
                           help='Build EBV table (Default = False)')
 
-        parser.add_option('--plot_MWE', action="store_true", default=False,
-                          help='Plot EBV (Default = False)')
-
         parser.add_option('--build_galaxy_skypixel_associations', action="store_true", default=False,
                           help='Register galaxies to sky pixels (Default = False)')
 
         parser.add_option('--build_completeness', action="store_true", default=False,
                           help='Build completeness table (Default = False)')
-
-        parser.add_option('--plot_completeness', action="store_true", default=False,
-                          help='Expensive! Plot all completeness slices (Default = False)')
 
         parser.add_option('--build_static_grids', action="store_true", default=False,
                           help='Build Swope and Thacher grids (Default = False)')
@@ -118,6 +112,10 @@ class Teglon:
         return (parser)
 
     def main(self):
+
+        pickle_output_dir = "./pickles/"
+        if not os.path.exists(pickle_output_dir):
+            os.makedirs(pickle_output_dir)
 
         print("Initializing database named: %s" % db_name)
 
