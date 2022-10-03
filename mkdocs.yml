@@ -3,5 +3,4 @@ repo_url: https://github.com/davecoulter/teglon_04/
 repo_name: davecoulter/teglon_04
 theme:
   name: material
-plugins:
-  - git-authors
+
