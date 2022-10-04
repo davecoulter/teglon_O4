@@ -106,6 +106,9 @@ class Teglon:
         parser.add_option('--build_completeness', action="store_true", default=False,
                           help='Build completeness table (Default = False)')
 
+        parser.add_option('--compose_completeness', action="store_true", default=False,
+                          help='Compose completness records into function input (Default = False)')
+
         parser.add_option('--build_static_grids', action="store_true", default=False,
                           help='Build Swope and Thacher grids (Default = False)')
 
@@ -611,13 +614,12 @@ class Teglon:
 
         ################################################
 
+        ## IS this necessary??
         if not self.options.build_galaxy_skypixel_associations:
             print("Skipping SkyPixel - Galaxy Associations...")
         else:
             ## Build SkyPixel - Galaxy associations
             print("\n\nBuilding SkyPixel - Galaxy Associations...")
-
-            galaxy_association_insert = "INSERT INTO SkyPixel_Galaxy (SkyPixel_id, Galaxy_id) VALUES (%s, %s);"
 
             insert_into_SP_G_query = '''
                 INSERT INTO SkyPixel_Galaxy (SkyPixel_id, Galaxy_id)
@@ -628,75 +630,12 @@ class Teglon:
                       g.z_dist IS NOT NULL AND
                       g.B IS NOT NULL;
             '''
-            top_level_galaxy_association_query = '''
-                SELECT 
-                    %s as SkyPixel_id, id as Galaxy_id 
-                FROM Galaxy g
-                WHERE g.z_dist IS NOT NULL and 
-                      g.B IS NOT NULL and 
-                      g.N%s_Pixel_Index = %s
-            '''
-            child_galaxy_association_query = '''
-                SELECT 
-                    %s as SkyPixel_id, g.id as Galaxy_id 
-                FROM Galaxy g
-                INNER JOIN SkyPixel_Galaxy sp_g ON sp_g.Galaxy_id = g.id 
-                INNER JOIN (SELECT DISTINCT Parent_Pixel_id FROM SkyPixel WHERE id in %s) filtered_parent on filtered_parent.Parent_Pixel_id = sp_g.SkyPixel_id 
-                WHERE 
-                    g.B IS NOT NULL AND 
-                    g.z_dist IS NOT NULL and 
-                    ST_CONTAINS((SELECT child.Poly FROM SkyPixel child WHERE child.id=%s), g.Coord) 
-            '''
 
             queries_to_exe = []
             for i, (nside, pixel_dict) in enumerate(sky_pixels.items()):
                 queries_to_exe.append(insert_into_SP_G_query % (nside, nside))
 
-            query_db(queries_to_exe, commit=True)
-
-            # for i, (nside, pixel_dict) in enumerate(sky_pixels.items()):
-            #
-            #     print("\nNumber of sky pixels: %s (NSIDE=%s)\n" % (len(pixel_dict), nside))
-            #     # galaxy_association_data = []
-            #     batch_queries = []
-            #
-            #     for j, (pi, sp) in enumerate(pixel_dict.items()):
-            #         batch_queries.append(top_level_galaxy_association_query % (sp.id, sp.nside, sp.index))
-            #
-            #     # if i == 0: # NSIDE = 2
-            #     #
-            #     #     for j, (pi, sp) in enumerate(pixel_dict.items()):
-            #     #         # batch_queries.append(top_level_galaxy_association_query % (sp.id, sp.query_polygon_string))
-            #     #         batch_queries.append(top_level_galaxy_association_query % (sp.id, sp.nside, sp.index))
-            #     # else:
-            #     #     for j, (pi, sp) in enumerate(pixel_dict.items()):
-            #     #
-            #     #         # Get this pixel's neighbors. This will allow to get a distinct list of shared parents
-            #     #         sibling_indices = list(hp.get_all_neighbours(sp.nside, sp.index)) + [sp.index]
-            #     #
-            #     #         sibling_ids = []
-            #     #         for si in sibling_indices:
-            #     #             if si > -1:
-            #     #                 sibling_ids.append(sky_pixels[nside][si].id)
-            #     #
-            #     #         sibling_ids_string = "("
-            #     #         for si in sibling_ids:
-            #     #             sibling_ids_string += "%s," % si
-            #     #         sibling_ids_string = sibling_ids_string[:-1] + ")"
-            #     #
-            #     #         # batch_queries.append(child_galaxy_association_query % (sp.id, sibling_ids_string, sp.id))
-            #     #         batch_queries.append(top_level_galaxy_association_query % (sp.id, sp.nside, sp.index))
-            #
-            #     _tstart = time.time()
-            #
-            #     print("\n\tNumber of batch queries for NSIDE=%s: %s" % (nside, len(batch_queries)))
-            #
-            #     galaxy_association_list_of_lists = batch_query(batch_queries)
-            #     galaxy_association_data = []
-            #     for galol in galaxy_association_list_of_lists:
-            #         galaxy_association_data += galol
-            #     print("\n\n Batch INSERT (%s) records..." % len(galaxy_association_data))
-            #     batch_insert(galaxy_association_insert, galaxy_association_data)
+            query_db([queries_to_exe], commit=True)
 
         ################################################
 
@@ -706,7 +645,7 @@ class Teglon:
             print("Building Completenesses...")
             solar_B_abs = 5.48 # mag
 
-            sky_completeness_select2 = '''
+            sky_completeness_select = '''
                 SELECT 
                     d.id as SkyDistance_id, 
                     sp.id as SkyPixel_id,
@@ -724,7 +663,7 @@ class Teglon:
                 ORDER BY sp.id, d.D1;
             '''
 
-            sky_distance_select2 = '''
+            sky_distance_select = '''
                 SELECT 
                     id, 
                     D1, 
@@ -741,15 +680,11 @@ class Teglon:
                 VALUES (%s, %s, %s, %s, %s) 
             '''
 
-            tstart = time.time()
-
-            sky_distances = batch_query([sky_distance_select2])[0]
+            sky_distances = batch_query([sky_distance_select])[0]
             smoothing_radius_Mpc = 30.0  # Mpc
             for sd_index, d in enumerate(sky_distances):
 
                 curr_iter = sd_index + 1
-                completeness_start = time.time()
-
                 print("\n**** Creating Completeness Slice %s/%s ****\n" % (curr_iter, len(sky_distances)))
 
                 d_ID = int(d[0])
@@ -762,7 +697,7 @@ class Teglon:
                 mpc_radian = cosmo.angular_diameter_distance(z)  # Mpc/radian
                 radian_radius = smoothing_radius_Mpc / mpc_radian.value
 
-                completeness_result = query_db([sky_completeness_select2 % (solar_B_abs, solar_B_abs, d_ID)])[0]
+                completeness_result = query_db([sky_completeness_select % (solar_B_abs, solar_B_abs, d_ID)])[0]
 
                 # retrieve the pixels for a given sky distance
                 current_pix = sky_pixels[d_NSIDE]
@@ -795,6 +730,67 @@ class Teglon:
                     insert_completeness_data.append((sp_value[0], sp_value[1], sp_value[2], sp_value[3], sp_value[4]))
 
                 batch_insert(sky_completeness_insert, insert_completeness_data)
+
+
+        if not self.options.compose_completeness:
+            print("Skipping Compose Completeness...")
+
+            if self.options.is_debug:
+                # Check that you can deserialize this...
+                composed_completeness_dict = None
+                with open('./pickles/composed_completeness_dict.pkl', 'rb') as handle:
+                    composed_completeness_dict = pickle.load(handle)
+        else:
+            composed_completeness_dict = OrderedDict()
+
+            select_insert_completeness = '''
+                        INSERT INTO CompletenessGrid (MeanDistance, SmoothedCompleteness, N128_SkyPixel_id)
+                        SELECT 
+                            0.5*(sd.D1+sd.D2) as Dist, sc.SmoothedCompleteness, sp1.id as N128_id
+                        FROM SkyPixel sp1 
+                        JOIN SkyPixel sp2 on sp2.id = sp1.Parent_Pixel_id 
+                        JOIN SkyPixel sp3 on sp3.id = sp2.Parent_Pixel_id 
+                        JOIN SkyPixel sp4 on sp4.id = sp3.Parent_Pixel_id 
+                        JOIN SkyPixel sp5 on sp5.id = sp4.Parent_Pixel_id 
+                        JOIN SkyPixel sp6 on sp6.id = sp5.Parent_Pixel_id 
+                        JOIN SkyPixel sp7 on sp7.id = sp6.Parent_Pixel_id 
+                        JOIN SkyCompleteness sc on sc.SkyPixel_id in (sp1.id, sp2.id, sp3.id, sp4.id, sp5.id, sp6.id, sp7.id) 
+                        JOIN SkyDistance sd on sd.id = sc.SkyDistance_id 
+                        WHERE
+                            sp1.NSIDE = 128 AND
+                            sp2.NSIDE = 64 AND
+                            sp3.NSIDE = 32 AND
+                            sp4.NSIDE = 16 AND
+                            sp5.NSIDE = 8 AND
+                            sp6.NSIDE = 4 AND
+                            sp7.NSIDE = 2
+                        ORDER BY sp1.id, sd.D1;
+                        '''
+            query_db([select_insert_completeness], commit=True)
+
+            select_composed_completeness = '''
+                SELECT id, MeanDistance, SmoothedCompleteness, N128_SkyPixel_id FROM CompletenessGrid;
+            '''
+
+            composed_completeness_result = query_db([select_composed_completeness])[0]
+            for ccr in composed_completeness_result:
+                mean_dist = float(ccr[1])
+                smoothed_completeness = float(ccr[2])
+                n128_pix_id = int(ccr[3])
+
+                if n128_pix_id not in composed_completeness_dict:
+                    composed_completeness_dict[n128_pix_id] = [[], []]
+
+                composed_completeness_dict[n128_pix_id][0].append(mean_dist)
+                composed_completeness_dict[n128_pix_id][1].append(smoothed_completeness)
+
+            # append a point at infinity
+            for key, val in composed_completeness_dict.items():
+                composed_completeness_dict[key][0].append(np.inf)
+                composed_completeness_dict[key][1].append(0.0)
+
+            with open('./pickles/composed_completeness_dict.pkl', 'wb') as handle:
+                pickle.dump(composed_completeness_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
         ################################################
 

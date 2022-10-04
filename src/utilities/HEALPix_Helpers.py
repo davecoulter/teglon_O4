@@ -2,7 +2,7 @@ import numpy as np
 import healpy as hp
 from astropy import units as u
 import astropy.coordinates as coord
-from Contour import distance_metric_squared, rbf_interpolate
+# from Contour import distance_metric_squared, rbf_interpolate
 import math
 # from Tile import *
 # from ..objects.Tile import *

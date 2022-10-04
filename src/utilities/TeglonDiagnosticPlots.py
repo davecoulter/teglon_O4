@@ -1,74 +1,9 @@
 import matplotlib
 matplotlib.use("Agg")
 
-import matplotlib as mpl
-import matplotlib.pyplot as plt
-# from mpl_toolkits.basemap import Basemap
-
-from matplotlib.patches import Polygon
-from matplotlib.pyplot import cm
-from matplotlib.patches import CirclePolygon
-from matplotlib import colors
-from mpl_toolkits.axes_grid1 import make_axes_locatable
-
-# import sys
-# sys.path.append('../')
-
-import os
-from configparser import RawConfigParser
-import multiprocessing as mp
-import mysql.connector
-from mysql.connector import Error
-import csv
-import time
-import pickle
-from collections import OrderedDict
-
-import numpy as np
-from scipy.special import erf
-from scipy.optimize import minimize, minimize_scalar
-import scipy.stats as st
-from scipy.integrate import simps
-from scipy.interpolate import interp2d
-
-import astropy as aa
-from astropy import cosmology
-from astropy.cosmology import WMAP5, WMAP7, LambdaCDM
-from astropy.coordinates import Distance
-from astropy.coordinates.angles import Angle
-from astropy.cosmology import z_at_value
-from astropy import units as u
-import astropy.coordinates as coord
-from dustmaps.config import config as dustmaps_config
-from dustmaps.sfd import SFDQuery
-
-import shapely as ss
-from shapely.ops import transform as shapely_transform
-from shapely.geometry import Point
-from shapely.ops import linemerge, unary_union, polygonize, split
-from shapely import geometry
-
-import healpy as hp
-from ligo.skymap import distance
-
-# import sys
-# sys.path.append('../objects/')
-# sys.path.append('./')
-
-
-from src.utilities.HEALPix_Helpers import *
-from src.utilities.Database_Helpers import *
-
 from src.objects.Detector import *
-from src.objects.Tile import *
-from src.objects.SQL_Polygon import *
 from src.objects.Pixel_Element import *
-from src.objects.Completeness_Objects import *
 
-
-# from mpl_toolkits.basemap import Basemap
-
-import multiprocessing as mp
 
 class Teglon:
 

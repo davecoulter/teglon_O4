@@ -1,319 +1,10 @@
-import matplotlib
-
-matplotlib.use("Agg")
-
-import matplotlib as mpl
-import matplotlib.pyplot as plt
-from mpl_toolkits.basemap import Basemap
-from matplotlib.patches import Polygon
-from matplotlib.pyplot import cm
-from matplotlib.patches import CirclePolygon
-from matplotlib import colors
-from mpl_toolkits.axes_grid1 import make_axes_locatable
-
-import sys
-
-sys.path.append('../')
-
-import os
-import optparse
-
-from configparser import RawConfigParser
-import multiprocessing as mp
-import mysql.connector
-
-import mysql.connector as test
-
-print(test.__version__)
-
-from mysql.connector.constants import ClientFlag
-from mysql.connector import Error
+# from src.objects.Detector import *
+# from src.objects.Pixel_Element import *
 import csv
-import time
-import pickle
-from collections import OrderedDict
-
-import numpy as np
-from scipy.special import erf
-from scipy.optimize import minimize, minimize_scalar
-import scipy.stats as st
-from scipy.integrate import simps
-from scipy.interpolate import interp2d
-
-import astropy as aa
-from astropy import cosmology
-from astropy.cosmology import WMAP5, WMAP7, LambdaCDM
-from astropy.coordinates import Distance
-from astropy.coordinates.angles import Angle
-from astropy.cosmology import z_at_value
-from astropy import units as u
 import astropy.coordinates as coord
-from dustmaps.config import config
-from dustmaps.sfd import SFDQuery
-
-import shapely as ss
-from shapely.ops import transform as shapely_transform
-from shapely.geometry import Point
-from shapely.ops import linemerge, unary_union, polygonize, split
-from shapely import geometry
-
-import healpy as hp
-from ligo.skymap import distance
-
-from HEALPix_Helpers import *
-from Detector import *
-from Tile import *
-from SQL_Polygon import *
-from Pixel_Element import *
-from Completeness_Objects import *
-
-import psutil
-import shutil
-import urllib.request
-import requests
-from bs4 import BeautifulSoup
-from dateutil.parser import parse
-
-import glob
-import gc
-import json
-
-import MySQLdb as my
-
-__location__ = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(__file__)))
-configFile = os.path.join(__location__, 'Settings.ini')
-
-db_config = RawConfigParser()
-db_config.read(configFile)
-
-db_name = db_config.get('database', 'DATABASE_NAME')
-db_user = db_config.get('database', 'DATABASE_USER')
-db_pwd = db_config.get('database', 'DATABASE_PASSWORD')
-db_host = db_config.get('database', 'DATABASE_HOST')
-db_port = db_config.get('database', 'DATABASE_PORT')
-
-# region db methods
-def bulk_upload(query):
-    success = False
-    try:
-
-        conn = mysql.connector.connect(user=db_user, password=db_pwd, host=db_host, port=db_port, database=db_name)
-        cursor = conn.cursor()
-        cursor.execute(query)
-        conn.commit()
-        success = True
-
-    except Error as e:
-        print("Error in uploading CSV!")
-        print(e)
-    finally:
-        cursor.close()
-        conn.close()
-
-    return success
-
-
-def query_db(query_list, commit=False):
-    # query_string = ";".join(query_list)
-
-    results = []
-    try:
-        chunk_size = 1e+6
-
-        db = my.connect(host=db_host, user=db_user, passwd=db_pwd, db=db_name, port=3306)
-        cursor = db.cursor()
-
-        for q in query_list:
-            cursor.execute(q)
-
-            if commit:  # used for updates, etc
-                db.commit()
-
-            streamed_results = []
-            print("fetching results...")
-            while True:
-                r = cursor.fetchmany(1000000)
-                count = len(r)
-                streamed_results += r
-                size_in_mb = sys.getsizeof(streamed_results) / 1.0e+6
-
-                print("\tfetched: %s; current length: %s; running size: %0.3f MB" % (
-                    count, len(streamed_results), size_in_mb))
-
-                if not r or count < chunk_size:
-                    break
-
-        results.append(streamed_results)
-
-    # cnx = mysql.connector.connect(user=db_user, password=db_pwd, host=db_host, port=db_port, database=db_name)
-    # cursor = cnx.cursor()
-    # for result in cursor.execute(query_string, multi=True):
-
-    # 	streamed_results = []
-    # 	print("fetching results...")
-
-    # 	i = 0
-    # 	while True:
-    # 		i += chunk_size
-    # 		print("Fetching: %s records" % i)
-
-    # 		partial_result = result.fetchmany(chunk_size)
-    # 		count = len(partial_result)
-    # 		streamed_results += partial_result
-    # 		size_in_mb = sys.getsizeof(streamed_results)/1.0e+6
-
-    # 		print("\tfetched: %s; current length: %s; running size: %0.3f MB" % (count, len(streamed_results), size_in_mb))
-
-    # 		if not partial_result or count < chunk_size:
-    # 			break
-
-    # 	results.append(streamed_results)
-
-    except Error as e:
-        print('Error:', e)
-    finally:
-        cursor.close()
-        # cnx.close()
-        db.close()
-
-    # fake = [[[(1)]]]
-    return results
-
-
-def batch_query(query_list):
-    return_data = []
-    batch_size = 500
-    ii = 0
-    jj = batch_size
-    kk = len(query_list)
-
-    print("\nLength of data to query: %s" % kk)
-    print("Query batch size: %s" % batch_size)
-    print("Starting loop...")
-
-    number_of_queries = len(query_list) // batch_size
-    if len(query_list) % batch_size > 0:
-        number_of_queries += 1
-
-    query_num = 1
-    payload = []
-    while jj < kk:
-        t1 = time.time()
-
-        print("%s:%s" % (ii, jj))
-        payload = query_list[ii:jj]
-        return_data += query_db(payload)
-
-        ii = jj
-        jj += batch_size
-        t2 = time.time()
-
-        print("\n********* start DEBUG ***********")
-        print("Query %s/%s complete - execution time: %s" % (query_num, number_of_queries, (t2 - t1)))
-        print("********* end DEBUG ***********\n")
-
-        query_num += 1
-
-    print("Out of loop...")
-
-    t1 = time.time()
-
-    print("\n%s:%s" % (ii, kk))
-
-    payload = query_list[ii:kk]
-    return_data += query_db(payload)
-
-    t2 = time.time()
-
-    print("\n********* start DEBUG ***********")
-    print("Query %s/%s complete - execution time: %s" % (query_num, number_of_queries, (t2 - t1)))
-    print("********* end DEBUG ***********\n")
-
-    return return_data
-
-
-def insert_records(query, data):
-    _tstart = time.time()
-    success = False
-    try:
-        conn = mysql.connector.connect(user=db_user, password=db_pwd, host=db_host, port=db_port, database=db_name)
-        cursor = conn.cursor()
-        cursor.executemany(query, data)
-
-        conn.commit()
-        success = True
-    except Error as e:
-        print('Error:', e)
-    finally:
-        cursor.close()
-        conn.close()
-
-    _tend = time.time()
-    print("\n********* start DEBUG ***********")
-    print("insert_records execution time: %s" % (_tend - _tstart))
-    print("********* end DEBUG ***********\n")
-    return success
-
-
-def batch_insert(insert_statement, insert_data, batch_size=50000):
-    _tstart = time.time()
-
-    i = 0
-    j = batch_size
-    k = len(insert_data)
-
-    print("\nLength of data to insert: %s" % len(insert_data))
-    print("Insert batch size: %s" % batch_size)
-    print("Starting loop...")
-
-    number_of_inserts = len(insert_data) // batch_size
-    if len(insert_data) % batch_size > 0:
-        number_of_inserts += 1
-
-    insert_num = 1
-    payload = []
-    while j < k:
-        t1 = time.time()
-
-        print("%s:%s" % (i, j))
-        payload = insert_data[i:j]
-
-        if insert_records(insert_statement, payload):
-            i = j
-            j += batch_size
-        else:
-            raise ("Error inserting batch! Exiting...")
-
-        t2 = time.time()
-
-        print("\n********* start DEBUG ***********")
-        print("INSERT %s/%s complete - execution time: %s" % (insert_num, number_of_inserts, (t2 - t1)))
-        print("********* end DEBUG ***********\n")
-
-        insert_num += 1
-
-    print("Out of loop...")
-
-    t1 = time.time()
-
-    print("\n%s:%s" % (i, k))
-
-    payload = insert_data[i:k]
-    if not insert_records(insert_statement, payload):
-        raise ("Error inserting batch! Exiting...")
-
-    t2 = time.time()
-
-    print("\n********* start DEBUG ***********")
-    print("INSERT %s/%s complete - execution time: %s" % (insert_num, number_of_inserts, (t2 - t1)))
-    print("********* end DEBUG ***********\n")
-
-    _tend = time.time()
-
-    print("\n********* start DEBUG ***********")
-    print("batch_insert execution time: %s" % (_tend - _tstart))
-    print("********* end DEBUG ***********\n")
-# endregion
+import numpy as np
+from astropy import units as u
+from src.utilities.Database_Helpers import *
 
 class Teglon:
 
@@ -325,7 +16,7 @@ class Teglon:
         parser.add_option('--gw_id', default="", type="str",
                           help='LIGO superevent name, e.g. `S190425z` ')
 
-        parser.add_option('--healpix_dir', default='../Events/{GWID}', type="str",
+        parser.add_option('--healpix_dir', default='../../Events/{GWID}', type="str",
                           help='Directory for where to look for the healpix file.')
 
         parser.add_option('--healpix_file', default="", type="str", help='healpix filename.')
@@ -859,28 +550,28 @@ class Teglon:
         # g_detector_max_dec)
         galaxies_select = '''
                 SELECT 
-                    gd2.id, 
-                    gd2.Name_GWGC, 
-                    gd2.Name_HyperLEDA, 
-                    gd2.Name_2MASS, 
-                    gd2.RA, 
-                    gd2._Dec, 
-                    gd2.z_dist, 
-                    gd2.B, 
-                    gd2.K, 
-                    hp_gd2_w.GalaxyProb, 
+                    g.id, 
+                    g.Name_GWGC, 
+                    g.Name_HyperLEDA, 
+                    g.Name_2MASS, 
+                    g.RA, 
+                    g._Dec, 
+                    g.z_dist, 
+                    g.B, 
+                    g.K, 
+                    hp_g_w.GalaxyProb, 
                     sp_ebv.EBV*%s AS A_lambda 
                 FROM 
-                    GalaxyDistance2 gd2 
-                JOIN HealpixPixel_GalaxyDistance2 hp_gd2 on hp_gd2.GalaxyDistance2_id = gd2.id 
-                JOIN HealpixPixel_GalaxyDistance2_Weight hp_gd2_w on hp_gd2_w.HealpixPixel_GalaxyDistance2_id = hp_gd2.id 
-                JOIN HealpixPixel_Completeness hpc on hpc.HealpixPixel_id = hp_gd2.HealpixPixel_id 
-                JOIN HealpixPixel hp on hp.id = hp_gd2.HealpixPixel_id 
+                    Galaxy g 
+                JOIN HealpixPixel_Galaxy hp_g on hp_g.Galaxy_id = g.id 
+                JOIN HealpixPixel_Galaxy_Weight hp_g_w on hp_g_w.HealpixPixel_Galaxy_id = hp_g.id 
+                JOIN HealpixPixel_Completeness hpc on hpc.HealpixPixel_id = hp_g.HealpixPixel_id 
+                JOIN HealpixPixel hp on hp.id = hp_g.HealpixPixel_id 
                 JOIN SkyPixel_EBV sp_ebv on sp_ebv.N128_SkyPixel_id = hp.N128_SkyPixel_id 
                 WHERE 
                     hpc.HealpixMap_id = %s AND 
                     sp_ebv.EBV*%s <= %s AND 
-                    gd2._Dec BETWEEN %s AND %s 
+                    g._Dec BETWEEN %s AND %s 
                 '''
 
         # GALAXIES SELECT
@@ -888,29 +579,29 @@ class Teglon:
         # g_min_dec, g_max_dec)
         box_galaxies_select = '''
                 SELECT 
-                    gd2.id, 
-                    gd2.Name_GWGC, 
-                    gd2.Name_HyperLEDA, 
-                    gd2.Name_2MASS, 
-                    gd2.RA, 
-                    gd2._Dec, 
-                    gd2.z_dist, 
-                    gd2.B, 
-                    gd2.K, 
-                    hp_gd2_w.GalaxyProb, 
+                    g.id, 
+                    g.Name_GWGC, 
+                    g.Name_HyperLEDA, 
+                    g.Name_2MASS, 
+                    g.RA, 
+                    g._Dec, 
+                    g.z_dist, 
+                    g.B, 
+                    g.K, 
+                    hp_g_w.GalaxyProb, 
                     sp_ebv.EBV*%s AS A_lambda 
                 FROM 
-                    GalaxyDistance2 gd2 
-                JOIN HealpixPixel_GalaxyDistance2 hp_gd2 on hp_gd2.GalaxyDistance2_id = gd2.id 
-                JOIN HealpixPixel_GalaxyDistance2_Weight hp_gd2_w on hp_gd2_w.HealpixPixel_GalaxyDistance2_id = hp_gd2.id 
-                JOIN HealpixPixel_Completeness hpc on hpc.HealpixPixel_id = hp_gd2.HealpixPixel_id 
-                JOIN HealpixPixel hp on hp.id = hp_gd2.HealpixPixel_id 
+                    Galaxy g 
+                JOIN HealpixPixel_Galaxy hp_g on hp_g.Galaxy_id = g.id 
+                JOIN HealpixPixel_Galaxy_Weight hp_g_w on hp_g_w.HealpixPixel_Galaxy_id = hp_g.id 
+                JOIN HealpixPixel_Completeness hpc on hpc.HealpixPixel_id = hp_g.HealpixPixel_id 
+                JOIN HealpixPixel hp on hp.id = hp_g.HealpixPixel_id 
                 JOIN SkyPixel_EBV sp_ebv on sp_ebv.N128_SkyPixel_id = hp.N128_SkyPixel_id 
                 WHERE 
                     hpc.HealpixMap_id = %s AND 
                     sp_ebv.EBV*%s <= %s AND 
-                    gd2.RA BETWEEN %s AND %s AND 
-                    gd2._Dec BETWEEN %s AND %s 
+                    g.RA BETWEEN %s AND %s AND 
+                    g._Dec BETWEEN %s AND %s 
                 '''
 
         # endregion

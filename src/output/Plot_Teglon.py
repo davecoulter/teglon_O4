@@ -44,13 +44,14 @@ from scipy.interpolate import interp2d
 
 import astropy as aa
 from astropy import cosmology
-from astropy.cosmology import WMAP5, WMAP7, LambdaCDM
+from astropy.cosmology import LambdaCDM # WMAP5, WMAP7,
 from astropy.coordinates import Distance
 from astropy.coordinates.angles import Angle
 from astropy.cosmology import z_at_value
 from astropy import units as u
 import astropy.coordinates as coord
-from dustmaps.config import config
+# from dustmaps.config import config
+from dustmaps.config import config as dustmaps_config
 from dustmaps.sfd import SFDQuery
 
 import shapely as ss
@@ -63,12 +64,19 @@ from shapely.geometry import JOIN_STYLE
 import healpy as hp
 from ligo.skymap import distance
 
-from Detector import *
-from HEALPix_Helpers import *
-from Tile import *
-from SQL_Polygon import *
-from Pixel_Element import *
-from Completeness_Objects import *
+# from Detector import *
+# from HEALPix_Helpers import *
+# from Tile import *
+# from SQL_Polygon import *
+# from Pixel_Element import *
+# from Completeness_Objects import *
+
+from src.objects.Detector import *
+from src.objects.Tile import *
+# from src.objects.SQL_Polygon import *
+from src.objects.Pixel_Element import *
+from src.utilities.Database_Helpers import *
+
 
 import psutil
 import shutil
@@ -95,221 +103,11 @@ from astropy.coordinates import get_sun
 import matplotlib.animation as animation
 
 
-__location__ = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(__file__)))
-configFile = os.path.join(__location__, 'Settings.ini')
-
-db_config = RawConfigParser()
-db_config.read(configFile)
-
-db_name = db_config.get('database', 'DATABASE_NAME')
-db_user = db_config.get('database', 'DATABASE_USER')
-db_pwd = db_config.get('database', 'DATABASE_PASSWORD')
-db_host = db_config.get('database', 'DATABASE_HOST')
-db_port = db_config.get('database', 'DATABASE_PORT')
-
 isDEBUG = False
 
 
-# Database SELECT
-# For every sub-query, the iterable result is appended to a master list of results
-def bulk_upload(query):
-    success = False
-    try:
-
-        conn = mysql.connector.connect(user=db_user, password=db_pwd, host=db_host, port=db_port, database=db_name)
-        cursor = conn.cursor()
-        cursor.execute(query)
-        conn.commit()
-        success = True
-
-    except Error as e:
-        print("Error in uploading CSV!")
-        print(e)
-    finally:
-        cursor.close()
-        conn.close()
-
-    return success
-
-
-def query_db(query_list, commit=False):
-    # query_string = ";".join(query_list)
-
-    results = []
-    try:
-        chunk_size = 1e+6
-
-        db = my.connect(host=db_host, user=db_user, passwd=db_pwd, db=db_name, port=3306)
-        cursor = db.cursor()
-
-        for q in query_list:
-            cursor.execute(q)
-
-            if commit:  # used for updates, etc
-                db.commit()
-
-            streamed_results = []
-            print("\tfetching results...")
-            while True:
-                r = cursor.fetchmany(1000000)
-                count = len(r)
-                streamed_results += r
-                size_in_mb = sys.getsizeof(streamed_results) / 1.0e+6
-
-                print("\t\tfetched: %s; current length: %s; running size: %0.3f MB" % (
-                count, len(streamed_results), size_in_mb))
-
-                if not r or count < chunk_size:
-                    break
-
-        results.append(streamed_results)
-
-    except Error as e:
-        print('Error:', e)
-    finally:
-        cursor.close()
-        db.close()
-
-    return results
-
-
-def batch_query(query_list):
-    return_data = []
-    batch_size = 500
-    ii = 0
-    jj = batch_size
-    kk = len(query_list)
-
-    print("\nLength of data to query: %s" % kk)
-    print("Query batch size: %s" % batch_size)
-    print("Starting loop...")
-
-    number_of_queries = len(query_list) // batch_size
-    if len(query_list) % batch_size > 0:
-        number_of_queries += 1
-
-    query_num = 1
-    payload = []
-    while jj < kk:
-        t1 = time.time()
-
-        print("%s:%s" % (ii, jj))
-        payload = query_list[ii:jj]
-        return_data += query_db(payload)
-
-        ii = jj
-        jj += batch_size
-        t2 = time.time()
-
-        print("\n********* start DEBUG ***********")
-        print("Query %s/%s complete - execution time: %s" % (query_num, number_of_queries, (t2 - t1)))
-        print("********* end DEBUG ***********\n")
-
-        query_num += 1
-
-    print("Out of loop...")
-
-    t1 = time.time()
-
-    print("\n%s:%s" % (ii, kk))
-
-    payload = query_list[ii:kk]
-    return_data += query_db(payload)
-
-    t2 = time.time()
-
-    print("\n********* start DEBUG ***********")
-    print("Query %s/%s complete - execution time: %s" % (query_num, number_of_queries, (t2 - t1)))
-    print("********* end DEBUG ***********\n")
-
-    return return_data
-
-
-def insert_records(query, data):
-    _tstart = time.time()
-    success = False
-    try:
-        conn = mysql.connector.connect(user=db_user, password=db_pwd, host=db_host, port=db_port, database=db_name)
-        cursor = conn.cursor()
-        cursor.executemany(query, data)
-
-        conn.commit()
-        success = True
-    except Error as e:
-        print('Error:', e)
-    finally:
-        cursor.close()
-        conn.close()
-
-    _tend = time.time()
-    print("\n********* start DEBUG ***********")
-    print("insert_records execution time: %s" % (_tend - _tstart))
-    print("********* end DEBUG ***********\n")
-    return success
-
-
-def batch_insert(insert_statement, insert_data, batch_size=50000):
-    _tstart = time.time()
-
-    i = 0
-    j = batch_size
-    k = len(insert_data)
-
-    print("\nLength of data to insert: %s" % len(insert_data))
-    print("Insert batch size: %s" % batch_size)
-    print("Starting loop...")
-
-    number_of_inserts = len(insert_data) // batch_size
-    if len(insert_data) % batch_size > 0:
-        number_of_inserts += 1
-
-    insert_num = 1
-    payload = []
-    while j < k:
-        t1 = time.time()
-
-        print("%s:%s" % (i, j))
-        payload = insert_data[i:j]
-
-        if insert_records(insert_statement, payload):
-            i = j
-            j += batch_size
-        else:
-            raise ("Error inserting batch! Exiting...")
-
-        t2 = time.time()
-
-        print("\n********* start DEBUG ***********")
-        print("INSERT %s/%s complete - execution time: %s" % (insert_num, number_of_inserts, (t2 - t1)))
-        print("********* end DEBUG ***********\n")
-
-        insert_num += 1
-
-    print("Out of loop...")
-
-    t1 = time.time()
-
-    print("\n%s:%s" % (i, k))
-
-    payload = insert_data[i:k]
-    if not insert_records(insert_statement, payload):
-        raise ("Error inserting batch! Exiting...")
-
-    t2 = time.time()
-
-    print("\n********* start DEBUG ***********")
-    print("INSERT %s/%s complete - execution time: %s" % (insert_num, number_of_inserts, (t2 - t1)))
-    print("********* end DEBUG ***********\n")
-
-    _tend = time.time()
-
-    print("\n********* start DEBUG ***********")
-    print("batch_insert execution time: %s" % (_tend - _tstart))
-    print("********* end DEBUG ***********\n")
-
-
 # Set up dustmaps config
-config["data_dir"] = "./"
+dustmaps_config["data_dir"] = "./"
 
 # Generate all pixel indices
 cosmo = LambdaCDM(H0=70, Om0=0.3, Ode0=0.7)
@@ -333,7 +131,7 @@ class Teglon:
         parser.add_option('--gw_id', default="", type="str",
                           help='LIGO superevent name, e.g. `S190425z` ')
 
-        parser.add_option('--healpix_dir', default='../Events/{GWID}', type="str",
+        parser.add_option('--healpix_dir', default='../../Events/{GWID}', type="str",
                           help='Directory for where to look for the healpix file.')
 
         parser.add_option('--healpix_file', default="", type="str", help='Healpix filename.')
@@ -451,9 +249,10 @@ class Teglon:
             return 1
 
         # Get Map ID
-        healpix_map_select = "SELECT id, RescaledNSIDE FROM HealpixMap WHERE GWID = '%s' and Filename = '%s'"
+        healpix_map_select = "SELECT id, RescaledNSIDE, t_0 FROM HealpixMap WHERE GWID = '%s' and Filename = '%s'"
         healpix_map_result = query_db([healpix_map_select % (self.options.gw_id, self.options.healpix_file)])[0][0]
         healpix_map_id = int(healpix_map_result[0])
+        healpix_map_event_time = Time(healpix_map_result[2], format="gps")
         healpix_map_nside = int(healpix_map_result[1])
 
         band_name = band_mapping[self.options.band]
@@ -791,7 +590,8 @@ class Teglon:
 
 
         # Plot Sun
-        sun_angle_time = Time(datetime.utcnow(), scale='utc')
+        # sun_angle_time = Time(datetime.utcnow(), scale='utc')
+        sun_angle_time = Time(healpix_map_event_time.to_datetime(), scale="utc")
         sun_coord = get_sun(sun_angle_time)
 
         ra = np.linspace(0, 360, 1000)

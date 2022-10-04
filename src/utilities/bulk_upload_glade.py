@@ -5,7 +5,7 @@ import healpy as hp
 import numpy as np
 from astropy.cosmology import z_at_value, FlatLambdaCDM
 
-from Database_Helpers import *
+from src.utilities.Database_Helpers import *
 
 glade_catalog_in = "./galaxy_catalog_files/GLADE_2.4.txt"
 glade_catalog_mid = "./galaxy_catalog_files/GLADE_2.4.mid.txt"
@@ -30,6 +30,10 @@ def get_z_dist_and_err(z):
 
     return glade_d.value, glade_d_symmetric_err.value
 
+def get_B_luminosity_proxy(b_mag, z_dist):
+    proxy = (z_dist**2)*(10.0**(-0.4*b_mag))
+    return proxy
+
 transform_GLADE = True
 if transform_GLADE:
     print("Processing GLADE catalog...")
@@ -45,6 +49,7 @@ if transform_GLADE:
         row_count = sum(1 for row in csv_reader)
 
     glade_z_to_transform = []
+    glade_B_to_transform = []
     glade_ra_to_transform = []
     glade_dec_to_transform = []
     with open(glade_catalog_in, 'r') as csvfile_in:
@@ -65,6 +70,8 @@ if transform_GLADE:
                     ra = float(row[6])
                     dec = float(row[7])
                     coord_str = "POINT(%s %s)" % (dec, ra - 180.0)  # Dec, RA order due to MySQL convention for lat/lon
+
+                    glade_B_to_transform.append(float(app_B_mag_str))
                     glade_z_to_transform.append(float(z_str))
                     glade_ra_to_transform.append(np.radians(ra))
                     glade_dec_to_transform.append(np.radians(dec))
@@ -73,7 +80,10 @@ if transform_GLADE:
                     output_row += [coord_str]
                     csvwriter.writerow(output_row)
 
-    transformed_z_dist, transformed_z_dist_err  = get_z_dist_and_err(np.asarray(glade_z_to_transform))
+    transformed_z_dist, transformed_z_dist_err = get_z_dist_and_err(np.asarray(glade_z_to_transform))
+    transformed_B_lum_proxy = get_B_luminosity_proxy(np.asarray(glade_B_to_transform), transformed_z_dist)
+    B_lum_proxy_norm = np.sum(transformed_B_lum_proxy)
+    b_weights = transformed_B_lum_proxy/B_lum_proxy_norm
     nside_2_pixl_indices = hp.ang2pix(nside=2, theta=0.5 * np.pi - np.asarray(glade_dec_to_transform),
                                       phi=np.asarray(glade_ra_to_transform))
     nside_4_pixl_indices = hp.ang2pix(nside=4, theta=0.5 * np.pi - np.asarray(glade_dec_to_transform),
@@ -94,6 +104,8 @@ if transform_GLADE:
                                       phi=np.asarray(glade_ra_to_transform))
     nside_1024_pixl_indices = hp.ang2pix(nside=1024, theta=0.5 * np.pi - np.asarray(glade_dec_to_transform),
                                       phi=np.asarray(glade_ra_to_transform))
+    nside_2048_pixl_indices = hp.ang2pix(nside=2048, theta=0.5 * np.pi - np.asarray(glade_dec_to_transform),
+                                         phi=np.asarray(glade_ra_to_transform))
 
     print("\n")
     with open(glade_catalog_mid, 'r') as csvfile_in:
@@ -116,13 +128,16 @@ if transform_GLADE:
                 nside_32_idx = nside_32_pixl_indices[i]
                 nside_64_idx = nside_64_pixl_indices[i]
                 nside_128_idx = nside_128_pixl_indices[i]
-
                 nside_256_idx = nside_256_pixl_indices[i]
                 nside_512_idx = nside_512_pixl_indices[i]
                 nside_1024_idx = nside_1024_pixl_indices[i]
+                nside_2048_idx = nside_2048_pixl_indices[i]
+                b_lum_proxy = transformed_B_lum_proxy[i]
+                b_weight = b_weights[i]
                 output_row = row
                 output_row += [z_dist, z_dist_err, nside_2_idx, nside_4_idx, nside_8_idx, nside_16_idx, nside_32_idx,
-                               nside_64_idx, nside_128_idx, nside_256_idx, nside_512_idx, nside_1024_idx]
+                               nside_64_idx, nside_128_idx, nside_256_idx, nside_512_idx, nside_1024_idx,
+                               nside_2048_idx, b_lum_proxy, b_weight]
                 csvwriter.writerow(output_row)
     t2 = time.time()
     print("\n********* start DEBUG ***********")
@@ -139,7 +154,7 @@ if do_data_upload:
             (PGC, Name_GWGC, Name_HyperLEDA, Name_2MASS, Name_SDSS_DR12, flag1, RA, _Dec, dist, dist_err, z,
             B, B_err, B_abs, J, J_err, H, H_err, K, K_err, flag2, flag3, @point, z_dist, z_dist_err, N2_Pixel_Index, 
             N4_Pixel_Index, N8_Pixel_Index, N16_Pixel_Index, N32_Pixel_Index, N64_Pixel_Index, N128_Pixel_Index,
-            N256_Pixel_Index, N512_Pixel_Index, N1024_Pixel_Index)
+            N256_Pixel_Index, N512_Pixel_Index, N1024_Pixel_Index, N2048_Pixel_Index, LuminosityProxy, Bweight)
             SET Coord := ST_PointFromText(@point, 4326);"""
 
     success = bulk_upload(upload_sql % glade_catalog_out)

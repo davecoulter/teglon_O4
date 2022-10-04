@@ -1,44 +1,44 @@
-import numpy as np
-import healpy as hp
-from astropy import units as u
-import astropy.coordinates as coord
-from Contour import distance_metric_squared, rbf_interpolate
-import math
-from astropy.coordinates import Distance
-import healpy as hp
-from astropy.cosmology import WMAP5, WMAP7, LambdaCDM
-from shapely.geometry import Point
-from matplotlib.patches import CirclePolygon
-from shapely.ops import transform as shapely_transform
-from ligo.skymap import distance
-from scipy.special import erf
-import copy
+# import numpy as np
+# import healpy as hp
+# from astropy import units as u
+# import astropy.coordinates as coord
+# from Contour import distance_metric_squared, rbf_interpolate
+# import math
+# from astropy.coordinates import Distance
+# import healpy as hp
+# from astropy.cosmology import WMAP5, WMAP7, LambdaCDM
+# from shapely.geometry import Point
+# from matplotlib.patches import CirclePolygon
+# from shapely.ops import transform as shapely_transform
+# from ligo.skymap import distance
+# from scipy.special import erf
+# import copy
 from src.objects.Tile import *
 from src.objects.Pixel_Element import *
 from src.objects.SQL_Polygon import *
-import pprint
-import time
+# import pprint
+# import time
 import astropy.time
-import math
-from matplotlib.patches import Polygon
+# import math
+# from matplotlib.patches import Polygon
 from shapely import geometry
 from mpl_toolkits.basemap import Basemap
 
-from configparser import RawConfigParser
-import mysql.connector
-from mysql.connector import Error
-import os
+# from configparser import RawConfigParser
+# import mysql.connector
+# from mysql.connector import Error
+# import os
 import urllib.request
 import requests
 import json
 import csv
 from shapely.geometry import JOIN_STYLE
 import pickle
-import MySQLdb as my
-import sys
-
-import multiprocessing as mp
-from scipy import spatial
+# import MySQLdb as my
+# import sys
+#
+# import multiprocessing as mp
+# from scipy import spatial
 from src.utilities.Database_Helpers import *
 
 
