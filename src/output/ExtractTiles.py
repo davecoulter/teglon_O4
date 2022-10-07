@@ -1,5 +1,3 @@
-# from src.objects.Detector import *
-# from src.objects.Pixel_Element import *
 import csv
 import astropy.coordinates as coord
 import numpy as np
@@ -549,60 +547,108 @@ class Teglon:
         # REPLACEMENT PARAMETERS: (band_F99, healpix_map_id, band_F99, self.options.extinct, g_detector_min_dec,
         # g_detector_max_dec)
         galaxies_select = '''
-                SELECT 
-                    g.id, 
-                    g.Name_GWGC, 
-                    g.Name_HyperLEDA, 
-                    g.Name_2MASS, 
-                    g.RA, 
-                    g._Dec, 
-                    g.z_dist, 
-                    g.B, 
-                    g.K, 
-                    hp_g_w.GalaxyProb, 
-                    sp_ebv.EBV*%s AS A_lambda 
-                FROM 
-                    Galaxy g 
-                JOIN HealpixPixel_Galaxy hp_g on hp_g.Galaxy_id = g.id 
-                JOIN HealpixPixel_Galaxy_Weight hp_g_w on hp_g_w.HealpixPixel_Galaxy_id = hp_g.id 
-                JOIN HealpixPixel_Completeness hpc on hpc.HealpixPixel_id = hp_g.HealpixPixel_id 
-                JOIN HealpixPixel hp on hp.id = hp_g.HealpixPixel_id 
-                JOIN SkyPixel_EBV sp_ebv on sp_ebv.N128_SkyPixel_id = hp.N128_SkyPixel_id 
-                WHERE 
-                    hpc.HealpixMap_id = %s AND 
-                    sp_ebv.EBV*%s <= %s AND 
-                    g._Dec BETWEEN %s AND %s 
-                '''
+            SELECT 
+                g.id, 
+                g.Name_GWGC, 
+                g.Name_HyperLEDA, 
+                g.Name_2MASS, 
+                g.RA, 
+                g._Dec, 
+                g.z_dist, 
+                g.B, 
+                g.K, 
+                hp_g_w.GalaxyProb, 
+                sp_ebv.EBV*%s AS A_lambda 
+            FROM 
+                Galaxy g 
+            JOIN HealpixPixel_Galaxy_Weight hp_g_w on hp_g_w.Galaxy_id = g.id 
+            JOIN HealpixPixel hp on hp.id = hp_g_w.HealpixPixel_id 
+            JOIN SkyPixel_EBV sp_ebv on sp_ebv.N128_SkyPixel_id = hp.N128_SkyPixel_id 
+            WHERE 
+                hp.HealpixMap_id = %s AND 
+                sp_ebv.EBV*%s <= %s AND 
+                g._Dec BETWEEN %s AND %s; 
+        '''
+
+        # galaxies_select = '''
+        #         SELECT
+        #             g.id,
+        #             g.Name_GWGC,
+        #             g.Name_HyperLEDA,
+        #             g.Name_2MASS,
+        #             g.RA,
+        #             g._Dec,
+        #             g.z_dist,
+        #             g.B,
+        #             g.K,
+        #             hp_g_w.GalaxyProb,
+        #             sp_ebv.EBV*%s AS A_lambda
+        #         FROM
+        #             Galaxy g
+        #         JOIN HealpixPixel_Galaxy hp_g on hp_g.Galaxy_id = g.id
+        #         JOIN HealpixPixel_Galaxy_Weight hp_g_w on hp_g_w.HealpixPixel_Galaxy_id = hp_g.id
+        #         JOIN HealpixPixel_Completeness hpc on hpc.HealpixPixel_id = hp_g.HealpixPixel_id
+        #         JOIN HealpixPixel hp on hp.id = hp_g.HealpixPixel_id
+        #         JOIN SkyPixel_EBV sp_ebv on sp_ebv.N128_SkyPixel_id = hp.N128_SkyPixel_id
+        #         WHERE
+        #             hpc.HealpixMap_id = %s AND
+        #             sp_ebv.EBV*%s <= %s AND
+        #             g._Dec BETWEEN %s AND %s
+        #         '''
 
         # GALAXIES SELECT
         # REPLACEMENT PARAMETERS: (band_F99, healpix_map_id, band_F99, self.options.extinct, g_min_ra, g_max_ra,
         # g_min_dec, g_max_dec)
         box_galaxies_select = '''
-                SELECT 
-                    g.id, 
-                    g.Name_GWGC, 
-                    g.Name_HyperLEDA, 
-                    g.Name_2MASS, 
-                    g.RA, 
-                    g._Dec, 
-                    g.z_dist, 
-                    g.B, 
-                    g.K, 
-                    hp_g_w.GalaxyProb, 
-                    sp_ebv.EBV*%s AS A_lambda 
-                FROM 
-                    Galaxy g 
-                JOIN HealpixPixel_Galaxy hp_g on hp_g.Galaxy_id = g.id 
-                JOIN HealpixPixel_Galaxy_Weight hp_g_w on hp_g_w.HealpixPixel_Galaxy_id = hp_g.id 
-                JOIN HealpixPixel_Completeness hpc on hpc.HealpixPixel_id = hp_g.HealpixPixel_id 
-                JOIN HealpixPixel hp on hp.id = hp_g.HealpixPixel_id 
-                JOIN SkyPixel_EBV sp_ebv on sp_ebv.N128_SkyPixel_id = hp.N128_SkyPixel_id 
-                WHERE 
-                    hpc.HealpixMap_id = %s AND 
-                    sp_ebv.EBV*%s <= %s AND 
-                    g.RA BETWEEN %s AND %s AND 
-                    g._Dec BETWEEN %s AND %s 
-                '''
+            SELECT 
+                g.id, 
+                g.Name_GWGC, 
+                g.Name_HyperLEDA, 
+                g.Name_2MASS, 
+                g.RA, 
+                g._Dec, 
+                g.z_dist, 
+                g.B, 
+                g.K, 
+                hp_g_w.GalaxyProb, 
+                sp_ebv.EBV*%s AS A_lambda 
+            FROM 
+                Galaxy g 
+            JOIN HealpixPixel_Galaxy_Weight hp_g_w on hp_g_w.Galaxy_id = g.id 
+            JOIN HealpixPixel hp on hp.id = hp_g_w.HealpixPixel_id 
+            JOIN SkyPixel_EBV sp_ebv on sp_ebv.N128_SkyPixel_id = hp.N128_SkyPixel_id 
+            WHERE 
+                hp.HealpixMap_id = %s AND 
+                sp_ebv.EBV*%s <= %s AND 
+                g.RA BETWEEN %s AND %s AND 
+                g._Dec BETWEEN %s AND %s; 
+        '''
+        # box_galaxies_select = '''
+        #         SELECT
+        #             g.id,
+        #             g.Name_GWGC,
+        #             g.Name_HyperLEDA,
+        #             g.Name_2MASS,
+        #             g.RA,
+        #             g._Dec,
+        #             g.z_dist,
+        #             g.B,
+        #             g.K,
+        #             hp_g_w.GalaxyProb,
+        #             sp_ebv.EBV*%s AS A_lambda
+        #         FROM
+        #             Galaxy g
+        #         JOIN HealpixPixel_Galaxy hp_g on hp_g.Galaxy_id = g.id
+        #         JOIN HealpixPixel_Galaxy_Weight hp_g_w on hp_g_w.HealpixPixel_Galaxy_id = hp_g.id
+        #         JOIN HealpixPixel_Completeness hpc on hpc.HealpixPixel_id = hp_g.HealpixPixel_id
+        #         JOIN HealpixPixel hp on hp.id = hp_g.HealpixPixel_id
+        #         JOIN SkyPixel_EBV sp_ebv on sp_ebv.N128_SkyPixel_id = hp.N128_SkyPixel_id
+        #         WHERE
+        #             hpc.HealpixMap_id = %s AND
+        #             sp_ebv.EBV*%s <= %s AND
+        #             g.RA BETWEEN %s AND %s AND
+        #             g._Dec BETWEEN %s AND %s
+        #         '''
 
         # endregion
 

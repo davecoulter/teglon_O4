@@ -1,125 +1,15 @@
 import matplotlib
-
 matplotlib.use("Agg")
-
-import matplotlib as mpl
-import matplotlib.pyplot as plt
-from mpl_toolkits.basemap import Basemap
-from matplotlib.patches import Polygon
-from matplotlib.pyplot import cm
-from matplotlib.patches import CirclePolygon
-from matplotlib import colors
-from mpl_toolkits.axes_grid1 import make_axes_locatable
-import matplotlib.patheffects as path_effects
-
-
-import sys
-
-sys.path.append('../')
-
 import os
-import optparse
-
-from configparser import RawConfigParser
-import multiprocessing as mp
-import mysql.connector
-
-import mysql.connector as test
-
-print(test.__version__)
-
-from mysql.connector.constants import ClientFlag
-from mysql.connector import Error
-import csv
-import time
-import pickle
-from collections import OrderedDict
-
-import numpy as np
-from scipy.special import erf
-from scipy.optimize import minimize, minimize_scalar
-import scipy.stats as st
-from scipy.integrate import simps
-from scipy.interpolate import interp2d
-
-import astropy as aa
-from astropy import cosmology
-from astropy.cosmology import LambdaCDM # WMAP5, WMAP7,
-from astropy.coordinates import Distance
-from astropy.coordinates.angles import Angle
-from astropy.cosmology import z_at_value
-from astropy import units as u
-import astropy.coordinates as coord
-# from dustmaps.config import config
-from dustmaps.config import config as dustmaps_config
-from dustmaps.sfd import SFDQuery
-
-import shapely as ss
-from shapely.ops import transform as shapely_transform
-from shapely.geometry import Point
-from shapely.ops import linemerge, unary_union, polygonize, split
-from shapely import geometry
-from shapely.geometry import JOIN_STYLE
-
-import healpy as hp
-from ligo.skymap import distance
-
-# from Detector import *
-# from HEALPix_Helpers import *
-# from Tile import *
-# from SQL_Polygon import *
-# from Pixel_Element import *
-# from Completeness_Objects import *
+from astropy.time import Time
+from astropy.coordinates import get_sun
 
 from src.objects.Detector import *
 from src.objects.Tile import *
-# from src.objects.SQL_Polygon import *
 from src.objects.Pixel_Element import *
 from src.utilities.Database_Helpers import *
 
-
-import psutil
-import shutil
-import urllib.request
-import requests
-from bs4 import BeautifulSoup
-from dateutil.parser import parse
-
-import glob
-import gc
-import json
-
-import MySQLdb as my
-
-from spherical_geometry.polygon import SphericalPolygon
-import ephem
-from datetime import datetime, timezone, timedelta
-
-from astropy.coordinates import SkyCoord, EarthLocation, AltAz, ICRS
-# from astropy import units as unit
-from scipy import interpolate
-from astropy.time import Time
-from astropy.coordinates import get_sun
-import matplotlib.animation as animation
-
-
 isDEBUG = False
-
-
-# Set up dustmaps config
-dustmaps_config["data_dir"] = "./"
-
-# Generate all pixel indices
-cosmo = LambdaCDM(H0=70, Om0=0.3, Ode0=0.7)
-
-
-def get_healpix_pixel_id(galaxy_info):
-    phi, theta = np.radians(float(galaxy_info[8])), 0.5 * np.pi - np.radians(float(galaxy_info[9]))
-
-    # map NSIDE is last argument of galaxy_info
-    # return the galaxy_id with the pixel index in the NSIDE of the healpix map
-    return (galaxy_info[0], hp.ang2pix(int(galaxy_info[-1]), theta, phi))
-
 
 class Teglon:
 
@@ -296,8 +186,6 @@ class Teglon:
                 for row in csvreader:
                     name = row[0]
                     c = coord.SkyCoord(row[1], row[2], unit=(u.hour, u.deg))
-
-                    # t = Tile(c.ra.degree, c.dec.degree, detector.deg_width, detector.deg_height, healpix_map_nside)
                     t = Tile(c.ra.degree, c.dec.degree, detector=detector, nside=healpix_map_nside)
 
                     t.field_name = name
@@ -484,6 +372,7 @@ class Teglon:
             pixels_to_select = select_4D_pix % (healpix_map_id, self.options.cum_prob_outer)
 
         map_pix_result = query_db([pixels_to_select])[0]
+
         mwe_pix_result = query_db([select_mwe_pix % (band_F99, self.options.extinct)])[0]
         print("...done")
 
@@ -518,52 +407,61 @@ class Teglon:
                 break
         print("... %s" % index_outer)
 
-        print("Build multipolygons...")
-        net_inner_polygon = []
-        for p in map_pix_sorted[0:index_inner]:
-            net_inner_polygon += p.query_polygon
-        joined_inner_poly = unary_union(net_inner_polygon)
+        # region OLD MULTIPOLYGON CODE
+        # print("Build multipolygons...")
+        # net_inner_polygon = []
+        # for p in map_pix_sorted[0:index_inner]:
+        #     net_inner_polygon += p.query_polygon
+        # joined_inner_poly = unary_union(net_inner_polygon)
+        #
+        # # Fix any seams
+        # eps = 0.00001
+        # merged_inner_poly = []
+        # smoothed_inner_poly = joined_inner_poly.buffer(eps, 1, join_style=JOIN_STYLE.mitre).buffer(-eps, 1, join_style=JOIN_STYLE.mitre)
+        #
+        # try:
+        #     test_iter = iter(smoothed_inner_poly)
+        #     merged_inner_poly = smoothed_inner_poly
+        # except TypeError as te:
+        #     merged_inner_poly.append(smoothed_inner_poly)
+        #
+        # print("Number of sub-polygons in `merged_inner_poly`: %s" % len(merged_inner_poly))
+        # sql_inner_poly = SQL_Polygon(merged_inner_poly) # , detector
+        #
+        # net_outer_polygon = []
+        # for p in map_pix_sorted[0:index_outer]:
+        #     net_outer_polygon += p.query_polygon
+        # joined_outer_poly = unary_union(net_outer_polygon)
+        #
+        # # Fix any seams
+        # merged_outer_poly = []
+        # smoothed_outer_poly = joined_outer_poly.buffer(eps, 1, join_style=JOIN_STYLE.mitre).buffer(-eps, 1, join_style=JOIN_STYLE.mitre)
+        #
+        # try:
+        #     test_iter = iter(smoothed_outer_poly)
+        #     merged_outer_poly = smoothed_outer_poly
+        # except TypeError as te:
+        #     merged_outer_poly.append(smoothed_outer_poly)
+        #
+        # print("Number of sub-polygons in `merged_outer_poly`: %s" % len(merged_outer_poly))
+        # sql_outer_poly = SQL_Polygon(merged_outer_poly) # , detector
+        # print("... done.")
 
-        # Fix any seams
-        eps = 0.00001
-        merged_inner_poly = []
-        smoothed_inner_poly = joined_inner_poly.buffer(eps, 1, join_style=JOIN_STYLE.mitre).buffer(-eps, 1, join_style=JOIN_STYLE.mitre)
+        # sql_inner_poly.plot(m, ax, edgecolor='k', linewidth=0.75, facecolor='None')
+        # sql_outer_poly.plot(m, ax, edgecolor='k', linewidth=0.5, facecolor='None')
 
-        try:
-            test_iter = iter(smoothed_inner_poly)
-            merged_inner_poly = smoothed_inner_poly
-        except TypeError as te:
-            merged_inner_poly.append(smoothed_inner_poly)
-
-        print("Number of sub-polygons in `merged_inner_poly`: %s" % len(merged_inner_poly))
-        sql_inner_poly = SQL_Polygon(merged_inner_poly) # , detector
-
-        net_outer_polygon = []
-        for p in map_pix_sorted[0:index_outer]:
-            net_outer_polygon += p.query_polygon
-        joined_outer_poly = unary_union(net_outer_polygon)
-
-        # Fix any seams
-        merged_outer_poly = []
-        smoothed_outer_poly = joined_outer_poly.buffer(eps, 1, join_style=JOIN_STYLE.mitre).buffer(-eps, 1, join_style=JOIN_STYLE.mitre)
-
-        try:
-            test_iter = iter(smoothed_outer_poly)
-            merged_outer_poly = smoothed_outer_poly
-        except TypeError as te:
-            merged_outer_poly.append(smoothed_outer_poly)
-
-        print("Number of sub-polygons in `merged_outer_poly`: %s" % len(merged_outer_poly))
-        sql_outer_poly = SQL_Polygon(merged_outer_poly) # , detector
-        print("... done.")
+        # endregion
 
         # Plot!!
         fig = plt.figure(figsize=(10, 10), dpi=800)
         ax = fig.add_subplot(111)
         m = Basemap(projection='moll', lon_0=180.0)
 
-        sql_inner_poly.plot(m, ax, edgecolor='k', linewidth=0.75, facecolor='None')
-        sql_outer_poly.plot(m, ax, edgecolor='k', linewidth=0.5, facecolor='None')
+        for mp_i, mp in enumerate(map_pix_sorted[0:index_outer]):
+            alph = 0.05
+            if mp_i <= index_inner:
+                alph = 0.5
+            mp.plot(m, ax, edgecolor='limegreen', linewidth=0.75, facecolor='limegreen', alpha=alph)
 
         for p in mwe_pix:
             p.plot(m, ax, edgecolor='None', linewidth=0.5, facecolor='cornflowerblue', alpha=0.5)
@@ -571,10 +469,8 @@ class Teglon:
         print("Plotting (%s) Tiles..." % len(tiles_to_plot))
         if not self.options.get_tiles_from_db:
             for i, t in enumerate(tiles_to_plot):
-                # Dave Debug 2022-08-16
-                # if True:
-                if t.ra_deg < 358 and t.ra_deg > 2: #and t.dec_deg < 85.0 and t.dec_deg > -60:
-                # if t.dec_deg > -30:
+                # HACK - protecting against plotting errs
+                if t.ra_deg < 358 and t.ra_deg > 2:
                     t.plot(m, ax, edgecolor='r', facecolor='None', linewidth=0.25, alpha=1.0,
                            zorder=9900)
         else:
@@ -602,6 +498,8 @@ class Teglon:
         sun_positions = sun_coord.separation(all_sky)
         sun_avoidance_contour = m.contour(RA, DEC, sun_positions, latlon=True, levels=[0.0, 60.0], colors='darkorange',
                                           alpha=1.0, zorder=9990, linewidths=0.5)
+        sun_avoidance_contour_filled = m.contourf(RA, DEC, sun_positions, latlon=True, levels=[0.0, 60.0], colors='gold',
+                                          alpha=0.3, zorder=9990, linewidths=0.5)
 
         fmt = {}
         strs = [r'$60\degree$']

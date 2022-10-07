@@ -34,7 +34,7 @@ services:
             - ./db_init/init.sql:/docker-entrypoint-initdb.d/1.sql
 #            - ./db_init/teglon_schema_20220816.sql:/docker-entrypoint-initdb.d/2.sql
 #            - ./db_init/teglon_O4.sql:/docker-entrypoint-initdb.d/2.sql
-            - ./db_init/teglon_O4v2.sql:/docker-entrypoint-initdb.d/2.sql
+            - ./db_init/teglon_O4v4.sql:/docker-entrypoint-initdb.d/2.sql
             - ./db_init/angsep.sql:/docker-entrypoint-initdb.d/3.sql
             - ./db_init/teglon_users.sql:/docker-entrypoint-initdb.d/4.sql
             - ${VOL_DB_LOG}:/var/log/mysql

@@ -1,69 +1,12 @@
-import matplotlib
-matplotlib.use("Agg")
-
-# import matplotlib as mpl
-# import matplotlib.pyplot as plt
-# from mpl_toolkits.basemap import Basemap
-# from matplotlib.patches import Polygon
-# from matplotlib.pyplot import cm
-# from matplotlib.patches import CirclePolygon
-# from matplotlib import colors
-# from mpl_toolkits.axes_grid1 import make_axes_locatable
-
-import sys
-sys.path.append('../')
-
 import os
-# import optparse
-# from configparser import RawConfigParser
 import multiprocessing as mp
-# import mysql.connector
-
-import mysql.connector as test
-
-print(test.__version__)
-
-# from mysql.connector.constants import ClientFlag
-# from mysql.connector import Error
-# import csv
-# import time
-# import pickle
-# from collections import OrderedDict
-#
-# import numpy as np
 from scipy.special import erf
-# from scipy.optimize import minimize, minimize_scalar
-# import scipy.stats as st
-# from scipy.integrate import simps
-# from scipy.interpolate import interp2d
-#
-# import astropy as aa
-# from astropy import cosmology
-from astropy.cosmology import LambdaCDM # WMAP5, WMAP7,
-# from astropy.coordinates import Distance
-# from astropy.coordinates.angles import Angle
-# from astropy.cosmology import z_at_value
-# from astropy import units as u
-# import astropy.coordinates as coord
-# from dustmaps.config import config
-# from dustmaps.sfd import SFDQuery
-from dustmaps.config import config as dustmaps_config
-
-# import shapely as ss
-# from shapely.ops import transform as shapely_transform
-# from shapely.geometry import Point
-# from shapely.ops import linemerge, unary_union, polygonize, split
-# from shapely import geometry
-#
 # import healpy as hp
 from ligo.skymap import distance
-
 from src.objects.Detector import *
 from src.objects.Tile import *
-# from src.objects.SQL_Polygon import *
 from src.objects.Pixel_Element import *
 from src.utilities.Database_Helpers import *
-
 import psutil
 import shutil
 import urllib.request
@@ -71,50 +14,12 @@ import requests
 from bs4 import BeautifulSoup
 from dateutil.parser import parse
 
-# import glob
-# import gc
-# import json
-
-
 initialize_start = time.time()
-
-# Set up dustmaps config
-dustmaps_config["data_dir"] = "./"
-
-# Generate all pixel indices
-cosmo = LambdaCDM(H0=70, Om0=0.3, Ode0=0.7)
-
 
 def initialize_tile(tile):
     tile.enclosed_pixel_indices
     # tile.query_polygon_string
     return tile
-
-
-def get_healpix_pixel_id(galaxy_info):
-
-    nside_position_map = {
-        2: 26,
-        4: 27,
-        8: 28,
-        16: 29,
-        32: 30,
-        64: 31,
-        128: 32,
-        256: 33,
-        512: 34,
-        1024: 35
-    }
-    this_map_nside = int(galaxy_info[-1])
-    position_index = nside_position_map[this_map_nside]
-    pixel_index = int(galaxy_info[position_index])
-    # phi, theta = np.radians(float(galaxy_info[8])), 0.5 * np.pi - np.radians(float(galaxy_info[9]))
-
-    # map NSIDE is last argument of galaxy_info
-    # return the galaxy_id with the pixel index in the NSIDE of the healpix map
-    # return (galaxy_info[0], hp.ang2pix(int(galaxy_info[-1]), theta, phi))
-    return (galaxy_info[0], pixel_index)
-
 
 class Teglon:
 
@@ -782,126 +687,127 @@ class Teglon:
         if not build_galaxy_pixel_relation:
             print("Skipping galaxy-pixel relation...")
         else:
-            print("Building galaxy-pixel relation...")
-            # 1. Select all Galaxies from GD2
-            # 2. Resolve all Galaxies to a HealpixPixel index/id
-            # 3. Store HealpixPixel_Galaxy association
-            t1 = time.time()
-            galaxy_select = '''
-                SELECT 	id, 
-                        PGC, 
-                        Name_GWGC, 
-                        Name_HyperLEDA, 
-                        Name_2MASS, 
-                        Name_SDSS_DR12, 
-                        RA, 
-                        _Dec, 
-                        Coord, 
-                        dist, 
-                        dist_err, 
-                        z_dist, 
-                        z_dist_err, 
-                        z, 
-                        B, 
-                        B_err, 
-                        B_abs, 
-                        J, 
-                        J_err, 
-                        H, 
-                        H_err, 
-                        K, 
-                        K_err, 
-                        flag1, 
-                        flag2, 
-                        flag3,
-                        N2_Pixel_Index,
-                        N4_Pixel_Index,
-                        N8_Pixel_Index,
-                        N16_Pixel_Index,
-                        N32_Pixel_Index,
-                        N64_Pixel_Index,
-                        N128_Pixel_Index,
-                        N256_Pixel_Index,
-                        N512_Pixel_Index,
-                        N1024_Pixel_Index,
-                        %s
-                FROM Galaxy 
-                WHERE z_dist < 1206.0 
-            '''
-            galaxy_result = query_db([galaxy_select % map_nside])[0]
-            print("Number of Galaxies: %s" % len(galaxy_result))
-            t2 = time.time()
-            print("\n********* start DEBUG ***********")
-            print("Galaxy select execution time: %s" % (t2 - t1))
-            print("********* end DEBUG ***********\n")
-
-            t1 = time.time()
-
-            with mp.Pool() as pool:
-                galaxy_pixel_relations = pool.map(get_healpix_pixel_id, galaxy_result)
-
-            galaxy_pixel_data = []
-            for gp in galaxy_pixel_relations:
-                _pixel_index = gp[1]
-                _pixel_id = map_pixel_dict[_pixel_index][0]
-                _galaxy_id = gp[0]
-                galaxy_pixel_data.append((_pixel_id, _galaxy_id))
-
-            t2 = time.time()
-            print("\n********* start DEBUG ***********")
-            print("Galaxy-pixel creation execution time: %s" % (t2 - t1))
-            print("********* end DEBUG ***********\n")
-
-            # Create CSV, upload, and clean up CSV
-            galaxy_pixel_upload_csv = "%s/%s_gal_pix_upload.csv" % (formatted_healpix_dir, self.options.gw_id)
-            try:
-                t1 = time.time()
-                print("Creating `%s`" % galaxy_pixel_upload_csv)
-                with open(galaxy_pixel_upload_csv, 'w') as csvfile:
-                    csvwriter = csv.writer(csvfile)
-                    for data in galaxy_pixel_data:
-                        csvwriter.writerow(data)
-
-                t2 = time.time()
-                print("\n********* start DEBUG ***********")
-                print("CSV creation execution time: %s" % (t2 - t1))
-                print("********* end DEBUG ***********\n")
-            except Error as e:
-                print("Error in creating CSV:\n")
-                print(e)
-                print("\nExiting")
-                return 1
-
-            t1 = time.time()
-            upload_sql = """LOAD DATA LOCAL INFILE '%s' 
-                    INTO TABLE HealpixPixel_Galaxy
-                    FIELDS TERMINATED BY ',' 
-                    LINES TERMINATED BY '\n' 
-                    (HealpixPixel_id, Galaxy_id);"""
-
-            success = bulk_upload(upload_sql % galaxy_pixel_upload_csv)
-            if not success:
-                print("\nUnsuccessful bulk upload. Exiting...")
-                return 1
-
-            t2 = time.time()
-            print("\n********* start DEBUG ***********")
-            print("CSV upload execution time: %s" % (t2 - t1))
-
-            try:
-                print("Removing `%s`..." % galaxy_pixel_upload_csv)
-                os.remove(galaxy_pixel_upload_csv)
-
-                # Clean up
-                print("freeing `galaxy_pixel_data`...")
-                del galaxy_pixel_data
-
-                print("... Done")
-            except Error as e:
-                print("Error in file removal")
-                print(e)
-                print("\nExiting")
-                return 1
+            pass
+            # print("Building galaxy-pixel relation...")
+            # # 1. Select all Galaxies from GD2
+            # # 2. Resolve all Galaxies to a HealpixPixel index/id
+            # # 3. Store HealpixPixel_Galaxy association
+            # t1 = time.time()
+            # galaxy_select = '''
+            #     SELECT 	id,
+            #             PGC,
+            #             Name_GWGC,
+            #             Name_HyperLEDA,
+            #             Name_2MASS,
+            #             Name_SDSS_DR12,
+            #             RA,
+            #             _Dec,
+            #             Coord,
+            #             dist,
+            #             dist_err,
+            #             z_dist,
+            #             z_dist_err,
+            #             z,
+            #             B,
+            #             B_err,
+            #             B_abs,
+            #             J,
+            #             J_err,
+            #             H,
+            #             H_err,
+            #             K,
+            #             K_err,
+            #             flag1,
+            #             flag2,
+            #             flag3,
+            #             N2_Pixel_Index,
+            #             N4_Pixel_Index,
+            #             N8_Pixel_Index,
+            #             N16_Pixel_Index,
+            #             N32_Pixel_Index,
+            #             N64_Pixel_Index,
+            #             N128_Pixel_Index,
+            #             N256_Pixel_Index,
+            #             N512_Pixel_Index,
+            #             N1024_Pixel_Index,
+            #             %s
+            #     FROM Galaxy
+            #     WHERE z_dist < 1206.0
+            # '''
+            # galaxy_result = query_db([galaxy_select % map_nside])[0]
+            # print("Number of Galaxies: %s" % len(galaxy_result))
+            # t2 = time.time()
+            # print("\n********* start DEBUG ***********")
+            # print("Galaxy select execution time: %s" % (t2 - t1))
+            # print("********* end DEBUG ***********\n")
+            #
+            # t1 = time.time()
+            #
+            # with mp.Pool() as pool:
+            #     galaxy_pixel_relations = pool.map(get_healpix_pixel_id, galaxy_result)
+            #
+            # galaxy_pixel_data = []
+            # for gp in galaxy_pixel_relations:
+            #     _pixel_index = gp[1]
+            #     _pixel_id = map_pixel_dict[_pixel_index][0]
+            #     _galaxy_id = gp[0]
+            #     galaxy_pixel_data.append((_pixel_id, _galaxy_id))
+            #
+            # t2 = time.time()
+            # print("\n********* start DEBUG ***********")
+            # print("Galaxy-pixel creation execution time: %s" % (t2 - t1))
+            # print("********* end DEBUG ***********\n")
+            #
+            # # Create CSV, upload, and clean up CSV
+            # galaxy_pixel_upload_csv = "%s/%s_gal_pix_upload.csv" % (formatted_healpix_dir, self.options.gw_id)
+            # try:
+            #     t1 = time.time()
+            #     print("Creating `%s`" % galaxy_pixel_upload_csv)
+            #     with open(galaxy_pixel_upload_csv, 'w') as csvfile:
+            #         csvwriter = csv.writer(csvfile)
+            #         for data in galaxy_pixel_data:
+            #             csvwriter.writerow(data)
+            #
+            #     t2 = time.time()
+            #     print("\n********* start DEBUG ***********")
+            #     print("CSV creation execution time: %s" % (t2 - t1))
+            #     print("********* end DEBUG ***********\n")
+            # except Error as e:
+            #     print("Error in creating CSV:\n")
+            #     print(e)
+            #     print("\nExiting")
+            #     return 1
+            #
+            # t1 = time.time()
+            # upload_sql = """LOAD DATA LOCAL INFILE '%s'
+            #         INTO TABLE HealpixPixel_Galaxy
+            #         FIELDS TERMINATED BY ','
+            #         LINES TERMINATED BY '\n'
+            #         (HealpixPixel_id, Galaxy_id);"""
+            #
+            # success = bulk_upload(upload_sql % galaxy_pixel_upload_csv)
+            # if not success:
+            #     print("\nUnsuccessful bulk upload. Exiting...")
+            #     return 1
+            #
+            # t2 = time.time()
+            # print("\n********* start DEBUG ***********")
+            # print("CSV upload execution time: %s" % (t2 - t1))
+            #
+            # try:
+            #     print("Removing `%s`..." % galaxy_pixel_upload_csv)
+            #     os.remove(galaxy_pixel_upload_csv)
+            #
+            #     # Clean up
+            #     print("freeing `galaxy_pixel_data`...")
+            #     del galaxy_pixel_data
+            #
+            #     print("... Done")
+            # except Error as e:
+            #     print("Error in file removal")
+            #     print(e)
+            #     print("\nExiting")
+            #     return 1
 
         # clean up
         print("freeing `prob`...")
@@ -1272,12 +1178,6 @@ class Teglon:
                 return 1
 
 
-
-
-
-
-
-
         if not build_galaxy_weights:
             print("Skipping galaxy weights ...")
         else:
@@ -1307,58 +1207,25 @@ class Teglon:
             print("********* end DEBUG ***********\n")
 
             tt1 = time.time()
-            # Get galaxy luminosity normalization
-            # lum_norm_select = '''
-            #     SELECT SUM(POW(g.z_dist, 2)*POW(10.0, -0.4*g.B)) FROM Galaxy g
-            #     WHERE g.id IN (SELECT DISTINCT _g.id FROM Galaxy _g
-            #                      JOIN HealpixPixel_Galaxy hp_g on hp_g.Galaxy_id = _g.id
-            #                      JOIN HealpixPixel hp on hp.id = hp_g.HealpixPixel_id WHERE hp.HealpixMap_id = %s)
-            # '''
-            # lum_norm = query_db([lum_norm_select % healpix_map_id])[0][0][0]
-
-            # # Compute luminosity weight and pre-compute what we can on z_prob...
-            # precompute_select = '''
-            #     SELECT
-            #         hp_g.id as HealpixPixel_Galaxy_id,
-            #         hp.id,
-            #         hp.Pixel_Index,
-            #         hp.Prob,
-            #         g.z_dist,
-            #         g.z_dist_err,
-            #         hp.Mean,
-            #         hp.Stddev,
-            #         POW(g.z_dist, 2)*POW(10.0, -0.4*(g.B))/%s as Bweight,
-            #         ABS(g.z_dist - hp.Mean)/SQRT(POW(hp.Stddev, 2) + POW(g.z_dist_err, 2)) as SigmaTotal
-            #     FROM Galaxy g
-            #     JOIN HealpixPixel_Galaxy hp_g on hp_g.Galaxy_id = g.id
-            #     JOIN HealpixPixel hp on hp.id = hp_g.HealpixPixel_id
-            #     WHERE hp.HealpixMap_id = %s and g.id IN (SELECT DISTINCT _g.id FROM Galaxy _g
-            #                     JOIN HealpixPixel_Galaxy hp__g on hp__g.Galaxy_id = _g.id
-            #                     JOIN HealpixPixel _hp on _hp.id = hp__g.HealpixPixel_id WHERE _hp.HealpixMap_id = %s)
-            # '''
-            #
-            # precompute_result = query_db([precompute_select % (lum_norm, healpix_map_id, healpix_map_id)])[0]
-            # t2 = time.time()
 
             galaxy_4D_select = '''
-                SELECT 
-                    hp_g.id as HealpixPixel_Galaxy_id, 
-                    g.id,
-                    g.z_dist,
-                    g.z_dist_err,
-                    g.Bweight,
-                    hp.id, 
-                    hp.Pixel_Index,
-                    hp.Prob,
-                    hp.Mean,
-                    hp.Stddev,
-                    ABS(g.z_dist - hp.Mean)/SQRT(POW(hp.Stddev, 2) + POW(g.z_dist_err, 2)) as SigmaTotal 
-                FROM HealpixPixel_Galaxy hp_g
-                JOIN HealpixPixel hp on hp.id = hp_g.HealpixPixel_id
-                JOIN Galaxy g on g.id = hp_g.Galaxy_id
-                WHERE hp.HealpixMap_id = %s
+            SELECT 
+                g.id,
+                g.z_dist,
+                g.z_dist_err,
+                g.Bweight,
+                hp.id, 
+                hp.Pixel_Index,
+                hp.Prob,
+                hp.Mean,
+                hp.Stddev,
+                ABS(g.z_dist - hp.Mean)/SQRT(POW(hp.Stddev, 2) + POW(g.z_dist_err, 2)) as SigmaTotal 
+            FROM Galaxy g
+            JOIN HealpixPixel hp on hp.Pixel_Index = g.%s_Pixel_Index
+            WHERE hp.HealpixMap_id = %s;
             '''
-            precompute_result = query_db([galaxy_4D_select % healpix_map_id])[0]
+            precompute_result = query_db([galaxy_4D_select % ("N%s" % map_nside, healpix_map_id)])[0]
+            t2 = time.time()
 
             print("\n********* start DEBUG ***********")
             print("Precompute Select execution time: %s" % (t2 - t1))
@@ -1367,22 +1234,18 @@ class Teglon:
             galaxy_attributes = []
             four_d_prob_norm = 0.0
             for r in precompute_result:
-                hp_gd2_id = int(r[0])
-                two_d_prob = float(r[7])
-                lum_prob = float(r[4])
-                sigma_total = float(r[10])
-                z_prob = 1.0 - erf(sigma_total)
+                g_id = int(r[0])
+                hp_id = int(r[4])
 
-                # hp_gd2_id = int(r[0])
-                # two_d_prob = float(r[3])
-                # lum_prob = float(r[8])
-                # sigma_total = float(r[9])
-                # z_prob = 1.0 - erf(sigma_total)
+                lum_prob = float(r[3])
+                two_d_prob = float(r[6])
+                sigma_total = float(r[9])
+                z_prob = 1.0 - erf(sigma_total)
 
                 four_d_prob = z_prob * two_d_prob * lum_prob
                 four_d_prob_norm += four_d_prob
 
-                galaxy_attributes.append([hp_gd2_id, lum_prob, z_prob, two_d_prob, four_d_prob])
+                galaxy_attributes.append([g_id, hp_id, lum_prob, z_prob, two_d_prob, four_d_prob])
 
             # clean up
             print("freeing `precompute_result`...")
@@ -1390,9 +1253,22 @@ class Teglon:
 
             galaxy_attribute_data = []
             for g in galaxy_attributes:
-                norm_4d_weight = g[4] / four_d_prob_norm
+                # norm_4d_weight = g[4] / four_d_prob_norm
+
+                g_id = g[0]
+                hp_id = g[1]
+                lum_prob = g[2]
+                z_prob = g[3]
+                two_d_prob = g[4]
+                four_d_prob = g[5]
+
+                # norm_4d_weight = g[5] / four_d_prob_norm
+                norm_4d_weight = four_d_prob / four_d_prob_norm
+                net_gal_prob = norm_4d_weight * net_prob_to_galaxies
+
                 galaxy_attribute_data.append(
-                    (g[0], g[1], g[2], g[3], norm_4d_weight, norm_4d_weight * net_prob_to_galaxies))
+                    # (g[0], g[1], g[2], g[3], g[4], norm_4d_weight, norm_4d_weight * net_prob_to_galaxies))
+                    (g_id, hp_id, lum_prob, z_prob, two_d_prob, norm_4d_weight, net_gal_prob))
 
             # clean up
             print("freeing `galaxy_attributes`...")
@@ -1424,7 +1300,7 @@ class Teglon:
                     INTO TABLE HealpixPixel_Galaxy_Weight 
                     FIELDS TERMINATED BY ',' 
                     LINES TERMINATED BY '\n' 
-                    (HealpixPixel_Galaxy_id, LumWeight, zWeight, Prob2DWeight, Norm4DWeight, GalaxyProb);"""
+                    (Galaxy_id, HealpixPixel_id, LumWeight, zWeight, Prob2DWeight, Norm4DWeight, GalaxyProb);"""
 
             success = bulk_upload(upload_sql % galaxy_attributes_upload_csv)
             if not success:
@@ -1458,22 +1334,26 @@ class Teglon:
             # update the healpix pixel net prob column...
             print("Updating healpix pixel net prob...")
             t1 = time.time()
+
             healpix_pixel_net_prob_update = '''
                 UPDATE HealpixPixel_Completeness hpc1 
                 JOIN 
                 ( 
                     SELECT 
                         hpc2.id, 
-                        (hpc2.Renorm2DProb + IFNULL(SUM(hp_gd2_w.GalaxyProb),0.0)) as NetPixelProb 
+                        (hpc2.Renorm2DProb + IFNULL(SUM(hp_g_w.GalaxyProb),0.0)) as NetPixelProb 
                     FROM HealpixPixel_Completeness hpc2 
-                    LEFT JOIN HealpixPixel_Galaxy hp_gd2 on hp_gd2.HealpixPixel_id = hpc2.HealpixPixel_id 
-                    LEFT JOIN HealpixPixel_Galaxy_Weight hp_gd2_w on hp_gd2_w.HealpixPixel_Galaxy_id = hp_gd2.id 
+                    LEFT JOIN HealpixPixel_Galaxy_Weight hp_g_w on hp_g_w.HealpixPixel_id = hpc2.HealpixPixel_id
                     WHERE hpc2.HealpixMap_id = %s
-                    GROUP BY hpc2.id 
+                    GROUP BY hpc2.id
                 ) temp on hpc1.id = temp.id 
                 SET hpc1.NetPixelProb = temp.NetPixelProb 
                 WHERE hpc1.HealpixMap_id = %s;
             '''
+
+
+
+
             query_db([healpix_pixel_net_prob_update % (healpix_map_id, healpix_map_id)], commit=True)
             t2 = time.time()
             print("\n********* start DEBUG ***********")
