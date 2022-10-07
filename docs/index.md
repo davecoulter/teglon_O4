@@ -1,6 +1,7 @@
 # Welcome to teglon's documentation
 
 ![Map](static/map.png)
+**
 
 Teglon is a pixel based gravitational wave search and analysis pipeline. It optimizes 
 EM search strategies for gravitational wave sources given an input galaxy catalog. Teglon can 
