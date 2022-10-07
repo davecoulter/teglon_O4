@@ -1,7 +1,7 @@
 # Welcome to teglon's documentation
 
 ![Map](static/map.png)
-**
+*GW190425 localization map as transformed by Tegelon. Hot pixels represent high probability galaxies.*
 
 Teglon is a pixel based gravitational wave search and analysis pipeline. It optimizes 
 EM search strategies for gravitational wave sources given an input galaxy catalog. Teglon can 
