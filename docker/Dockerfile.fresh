@@ -1,13 +1,15 @@
-FROM davecoulter/astromini3:1.5
-LABEL description="Image for teglon debug"
+FROM python:3.5.10-slim-buster
+LABEL description="Image for teglon debug fresh"
 LABEL maintainer="Dave Coulter (dcoulter@ucsc.edu)"
 
 SHELL ["/bin/bash", "-c"]
 
-# If there are problems, remove astLib and htop... they aren't necessary right now
 RUN apt-get update && \
 pip install --upgrade pip && \
 apt-get clean && rm -rf /opt/conda/pkgs/* && \
 rm -rf /var/lib/apt/lists/*
+
+COPY ./requirements.txt ./requirements.txt
+RUN pip install -r requirements.txt
 
 WORKDIR /app
