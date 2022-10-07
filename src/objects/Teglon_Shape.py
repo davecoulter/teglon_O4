@@ -10,7 +10,7 @@ from abc import ABCMeta, abstractmethod, abstractproperty
 import math
 
 class Teglon_Shape(metaclass=ABCMeta):
-
+    """Base class representing a generic polygon in Teglon."""
     @staticmethod
     def vertex_rotation_matrix(theta_deg):
         theta_rad = np.deg2rad(theta_deg)
@@ -91,17 +91,26 @@ class Teglon_Shape(metaclass=ABCMeta):
 
     @property
     @abstractmethod
-    def radius_proxy(self):
+    def radius_proxy(self) -> float:
+        """float: Characteristic radius of the Teglon shape."""
         pass
 
     @property
     @abstractmethod
     def multipolygon(self):
+        """List[shapely.Polygon]: Composition of related polygons.
+
+        For example, a detector footprint that includes chip gaps.
+        """
         pass
 
     @property
     @abstractmethod
     def projected_multipolygon(self):
+        """List[shapely.Polygon]: Composition of related polygons.
+
+        For example, used for when a Tile has a position angle.
+        """
         pass
 
     def create_query_polygon(self, initial_poly_in_radian=True):

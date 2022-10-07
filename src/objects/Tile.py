@@ -14,6 +14,8 @@ from src.objects.Teglon_Shape import *
 
 
 class Tile(Teglon_Shape):
+    """Tile represent an instance of a Dectector on the sky.
+    """
     def __init__(self, central_ra_deg, central_dec_deg, detector, nside, position_angle_deg=0.0, net_prob=0.0,
                  tile_id=None, tile_mwe=0.0):
 
