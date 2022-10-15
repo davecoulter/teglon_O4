@@ -1,0 +1,2 @@
+Flask==1.1.4 # hack: need to update current version of python to support 2.2.2
+gunicorn==20.1.0
