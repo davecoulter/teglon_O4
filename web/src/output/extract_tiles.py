@@ -3,6 +3,7 @@ import astropy.coordinates as coord
 import numpy as np
 from astropy import units as u
 from src.utilities.Database_Helpers import *
+# from web.src.utilities.Database_Helpers import *
 
 class Teglon:
 
@@ -140,6 +141,8 @@ class Teglon:
         return (parser)
 
     def main(self):
+
+        print(self.options)
 
         t1 = time.time()
 

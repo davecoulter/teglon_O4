@@ -4,8 +4,11 @@ import MySQLdb as my
 from configparser import RawConfigParser
 import time
 import sys
+# import os
+# print(os.path.dirname(__file__))
 
-configFile = '../../Settings.ini'
+# configFile = '/opt/project/Settings.ini'
+configFile = 'Settings.ini'
 config = RawConfigParser()
 config.read(configFile)
 
