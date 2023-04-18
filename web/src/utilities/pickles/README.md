@@ -1,0 +1,1 @@
+This directory is where pickles are serialized to speed up computations and limit db I/O

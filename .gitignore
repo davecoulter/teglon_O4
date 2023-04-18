@@ -8,5 +8,6 @@ __pycache__/
 .env
 Settings.ini
 !*/requirements.txt
-*/events
+*/events/*
+!*/events/README.md
 web/src/utilities/galaxy_catalog_files/*.dat
