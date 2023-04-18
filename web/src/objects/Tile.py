@@ -10,8 +10,11 @@ from shapely.ops import transform as shapely_transform
 from shapely.geometry import Point
 # from Teglon_Shape import *
 # from src.objects import Teglon_Shape
-from src.objects.Teglon_Shape import *
 
+# 2023-04-03 OLD
+# from src.objects.Teglon_Shape import *
+# 2023-04-03 NEW
+from web.src.objects.Teglon_Shape import *
 
 class Tile(Teglon_Shape):
     def __init__(self, central_ra_deg, central_dec_deg, detector, nside, position_angle_deg=0.0, net_prob=0.0,

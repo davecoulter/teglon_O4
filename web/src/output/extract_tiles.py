@@ -2,8 +2,8 @@ import csv
 import astropy.coordinates as coord
 import numpy as np
 from astropy import units as u
-from src.utilities.Database_Helpers import *
-# from web.src.utilities.Database_Helpers import *
+# from src.utilities.Database_Helpers import *
+from web.src.utilities.Database_Helpers import *
 
 class Teglon:
 
@@ -15,7 +15,7 @@ class Teglon:
         parser.add_option('--gw_id', default="", type="str",
                           help='LIGO superevent name, e.g. `S190425z` ')
 
-        parser.add_option('--healpix_dir', default='../../Events/{GWID}', type="str",
+        parser.add_option('--healpix_dir', default='./web/events/{GWID}', type="str",
                           help='Directory for where to look for the healpix file.')
 
         parser.add_option('--healpix_file', default="", type="str", help='healpix filename.')

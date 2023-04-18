@@ -11,7 +11,12 @@ import statistics
 from shapely.ops import linemerge, unary_union, polygonize, split
 from shapely.geometry import Point
 # from Teglon_Shape import *
-from src.objects.Teglon_Shape import *
+
+
+# 2023-04-03 OLD
+# from src.objects.Teglon_Shape import *
+# 2023-04-03 NEW
+from web.src.objects.Teglon_Shape import *
 
 
 class Pixel_Element(Teglon_Shape):

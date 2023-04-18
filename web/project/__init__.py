@@ -1,17 +1,31 @@
 from flask import Flask, jsonify, send_from_directory
 from flask import request
 
+# from src.output.data_extraction import extract_tiles
 from web.src.output.data_extraction import extract_tiles
+# from ..src2.a.data_extraction import extract_tiles
 
 app = Flask(__name__)
 
 
 @app.route("/")
 def hello_world():
+    test = 1
     return jsonify(hello="world")
+
+@app.route("/")
+def load_map():
+    test = 1
+
+    # 1. Do work
+    # 2. What to return?
+
+    pass
+    # return jsonify(hello="world")
 
 @app.route("/static/<path:filename>")
 def staticfiles(path, filename):
+    test = 1
     return send_from_directory("/app/web/events/%s" % path, filename)
 
 @app.route("/get_tiles", methods=["GET"])

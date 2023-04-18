@@ -30,7 +30,25 @@ CREATE TABLE `Band` (
   `Effective_Wavelength` double NOT NULL,
   `F99_Coefficient` double NOT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=27 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `CompletenessGrid`
+--
+
+DROP TABLE IF EXISTS `CompletenessGrid`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+ SET character_set_client = utf8mb4 ;
+CREATE TABLE `CompletenessGrid` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `MeanDistance` double NOT NULL,
+  `SmoothedCompleteness` double NOT NULL,
+  `N128_SkyPixel_id` int NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `FK_CompletenessGrid_SkyPixel_idx` (`N128_SkyPixel_id`),
+  CONSTRAINT `FK_CompletenessGrid_SkyPixel` FOREIGN KEY (`N128_SkyPixel_id`) REFERENCES `SkyPixel` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=27131905 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -52,7 +70,7 @@ CREATE TABLE `Detector` (
   `Poly` multipolygon DEFAULT NULL,
   `TM_id` int DEFAULT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=95 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -99,6 +117,9 @@ CREATE TABLE `Galaxy` (
   `N256_Pixel_Index` int NOT NULL,
   `N512_Pixel_Index` int NOT NULL,
   `N1024_Pixel_Index` int NOT NULL,
+  `N2048_Pixel_Index` int NOT NULL,
+  `LuminosityProxy` double NOT NULL,
+  `Bweight` double NOT NULL,
   PRIMARY KEY (`id`),
   KEY `idx_Galaxy_id` (`id`),
   KEY `idx_Galaxy_RA` (`RA`),
@@ -108,8 +129,19 @@ CREATE TABLE `Galaxy` (
   KEY `idx_Galaxy_z_dist_err` (`z_dist_err`),
   KEY `idx_Galaxy_z` (`z`),
   KEY `idx_Galaxy_B` (`B`),
-  SPATIAL KEY `idx_Galaxy_Coord` (`Coord`)
-) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+  SPATIAL KEY `idx_Galaxy_Coord` (`Coord`),
+  KEY `idx_N2` (`N2_Pixel_Index`),
+  KEY `idx_N4` (`N4_Pixel_Index`),
+  KEY `idx_N8` (`N8_Pixel_Index`),
+  KEY `idx_N16` (`N16_Pixel_Index`),
+  KEY `idx_N32` (`N32_Pixel_Index`),
+  KEY `idx_N64` (`N64_Pixel_index`),
+  KEY `idx_N128` (`N128_Pixel_Index`),
+  KEY `ids_N256` (`N256_Pixel_Index`),
+  KEY `idx_N512` (`N512_Pixel_Index`),
+  KEY `idx_N1024` (`N1024_Pixel_Index`),
+  KEY `idx_N2048` (`N2048_Pixel_Index`)
+) ENGINE=InnoDB AUTO_INCREMENT=3252640 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -130,7 +162,7 @@ CREATE TABLE `HealpixMap` (
   `NetProbToGalaxies` double NOT NULL,
   `RescaledNSIDE` int NOT NULL DEFAULT '128',
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -159,7 +191,7 @@ CREATE TABLE `HealpixPixel` (
   KEY `FK_HealpixPixel_HealpixMap_idx` (`HealpixMap_id`),
   CONSTRAINT `FK_HealpixPixel_HealpixMap` FOREIGN KEY (`HealpixMap_id`) REFERENCES `HealpixMap` (`id`),
   CONSTRAINT `FK_HealpixPixel_SkyPixel` FOREIGN KEY (`N128_SkyPixel_id`) REFERENCES `SkyPixel` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -182,27 +214,7 @@ CREATE TABLE `HealpixPixel_Completeness` (
   KEY `idx_HealpixPixel_Completeness_NetPixelProb` (`NetPixelProb`),
   CONSTRAINT `FK_HealpixPixel_Completeness_HealpixMap_id` FOREIGN KEY (`HealpixMap_id`) REFERENCES `HealpixMap` (`id`),
   CONSTRAINT `FK_HealpixPixel_Completeness_HealpixPixel` FOREIGN KEY (`HealpixPixel_id`) REFERENCES `HealpixPixel` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
--- Table structure for table `HealpixPixel_Galaxy`
---
-
-DROP TABLE IF EXISTS `HealpixPixel_Galaxy`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
- SET character_set_client = utf8mb4 ;
-CREATE TABLE `HealpixPixel_Galaxy` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `HealpixPixel_id` int NOT NULL,
-  `Galaxy_id` int NOT NULL,
-  PRIMARY KEY (`id`),
-  KEY `FK_HealpixPixel_Galaxy_HealpixPixel_id_idx` (`HealpixPixel_id`),
-  KEY `FK_HealpixPixel_Galaxy_Galaxy_id_idx` (`Galaxy_id`),
-  KEY `idx_HealpixPixel_Galaxy_Galaxy_id` (`Galaxy_id`),
-  CONSTRAINT `FK_HealpixPixel_Galaxy_Galaxy_id` FOREIGN KEY (`Galaxy_id`) REFERENCES `Galaxy` (`id`),
-  CONSTRAINT `FK_HealpixPixel_Galaxy_HealpixPixel_id` FOREIGN KEY (`HealpixPixel_id`) REFERENCES `HealpixPixel` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=786433 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -214,17 +226,20 @@ DROP TABLE IF EXISTS `HealpixPixel_Galaxy_Weight`;
  SET character_set_client = utf8mb4 ;
 CREATE TABLE `HealpixPixel_Galaxy_Weight` (
   `id` int NOT NULL AUTO_INCREMENT,
-  `HealpixPixel_Galaxy_id` int NOT NULL,
+  `Galaxy_id` int NOT NULL,
+  `HealpixPixel_id` int NOT NULL,
   `LumWeight` double NOT NULL,
   `zWeight` double NOT NULL,
   `Prob2DWeight` double NOT NULL,
   `Norm4DWeight` double NOT NULL,
   `GalaxyProb` double NOT NULL,
   PRIMARY KEY (`id`),
-  KEY `FK_HGW_HealpixPixel_Galaxy_id_idx` (`HealpixPixel_Galaxy_id`),
   KEY `idx_HealpixPixel_Galaxy_Weight_GalaxyProb` (`GalaxyProb`),
-  CONSTRAINT `FK_HealpixPixel_Galaxy_Weight_HealpixPixel_Galaxy_id` FOREIGN KEY (`HealpixPixel_Galaxy_id`) REFERENCES `HealpixPixel_Galaxy` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+  KEY `FK_HealpixPixel_Galaxy_Weight_Galaxy_idx` (`Galaxy_id`),
+  KEY `FK_HealpixPixel_Galaxy_Weight_HealpixPixel_idx` (`HealpixPixel_id`),
+  CONSTRAINT `FK_HealpixPixel_Galaxy_Weight_Galaxy` FOREIGN KEY (`Galaxy_id`) REFERENCES `Galaxy` (`id`),
+  CONSTRAINT `FK_HealpixPixel_Galaxy_Weight_HealpixPixel` FOREIGN KEY (`HealpixPixel_id`) REFERENCES `HealpixPixel` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -260,7 +275,7 @@ CREATE TABLE `ObservedTile` (
   CONSTRAINT `FK_ObservedTile_Detector_Detector_id` FOREIGN KEY (`Detector_id`) REFERENCES `Detector` (`id`),
   CONSTRAINT `FK_ObservedTile_Detector_HealpixMap_id` FOREIGN KEY (`HealpixMap_id`) REFERENCES `HealpixMap` (`id`),
   CONSTRAINT `FK_ObservedTile_Detector_SkyPixel_id` FOREIGN KEY (`N128_SkyPixel_id`) REFERENCES `SkyPixel` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -279,7 +294,7 @@ CREATE TABLE `ObservedTile_HealpixPixel` (
   KEY `FK_ObservedTile_HealpixPixel_HealpixPixel_id_idx` (`HealpixPixel_id`),
   CONSTRAINT `FK_ObservedTile_HealpixPixel_HealpixPixel_id` FOREIGN KEY (`HealpixPixel_id`) REFERENCES `HealpixPixel` (`id`),
   CONSTRAINT `FK_ObservedTile_HealpixPixel_ObservedTile_id` FOREIGN KEY (`ObservedTile_id`) REFERENCES `ObservedTile` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -301,7 +316,7 @@ CREATE TABLE `SkyCompleteness` (
   KEY `Completeness_SkyDistance_id_idx` (`SkyDistance_id`),
   CONSTRAINT `Completeness_SkyDistance_id` FOREIGN KEY (`SkyDistance_id`) REFERENCES `SkyDistance` (`id`),
   CONSTRAINT `Completeness_SkyPixel_id` FOREIGN KEY (`SkyPixel_id`) REFERENCES `SkyPixel` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=5099617 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -321,7 +336,7 @@ CREATE TABLE `SkyDistance` (
   PRIMARY KEY (`id`),
   KEY `idx_SkyDistance_D1` (`D1`),
   KEY `idx_SkyDistance_D2` (`D2`)
-) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=277 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -349,7 +364,7 @@ CREATE TABLE `SkyPixel` (
   KEY `idx_SkyPixel_NSIDE` (`NSIDE`),
   KEY `FK_SkyPixel_SkyPixel_Parent1` (`Parent_Pixel_id`),
   CONSTRAINT `FK_SkyPixel_SkyPixel_Parent1` FOREIGN KEY (`Parent_Pixel_id`) REFERENCES `SkyPixel` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT
-) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=524257 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -366,7 +381,7 @@ CREATE TABLE `SkyPixel_EBV` (
   PRIMARY KEY (`id`),
   KEY `FK_SkyPixel_EBV_N128_SkyPixel_id_idx` (`N128_SkyPixel_id`),
   CONSTRAINT `FK_SkyPixel_EBV_N128_SkyPixel_id` FOREIGN KEY (`N128_SkyPixel_id`) REFERENCES `SkyPixel` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=393217 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -385,7 +400,7 @@ CREATE TABLE `SkyPixel_Galaxy` (
   KEY `FK_SkyPixel_id_idx` (`SkyPixel_id`),
   CONSTRAINT `FK_Galaxy_id` FOREIGN KEY (`Galaxy_id`) REFERENCES `Galaxy` (`id`),
   CONSTRAINT `FK_SkyPixel_id` FOREIGN KEY (`SkyPixel_id`) REFERENCES `SkyPixel` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=22889029 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -410,7 +425,7 @@ CREATE TABLE `StaticTile` (
   KEY `FK_StaticTile_SkyPixel_N128_SkyPixel_id_idx` (`N128_SkyPixel_id`),
   CONSTRAINT `FK_StaticTile_Detector_Detector_id` FOREIGN KEY (`Detector_id`) REFERENCES `Detector` (`id`),
   CONSTRAINT `FK_StaticTile_SkyPixel_N128_SkyPixel_id` FOREIGN KEY (`N128_SkyPixel_id`) REFERENCES `SkyPixel` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=1026005 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -429,7 +444,23 @@ CREATE TABLE `StaticTile_HealpixPixel` (
   KEY `FK_StaticTile_HealpixPixel_HealpixPixel_id_idx` (`HealpixPixel_id`),
   CONSTRAINT `FK_StaticTile_HealpixPixel_HealpixPixel_id` FOREIGN KEY (`HealpixPixel_id`) REFERENCES `HealpixPixel` (`id`),
   CONSTRAINT `FK_StaticTile_HealpixPixel_StaticTile_id` FOREIGN KEY (`StaticTile_id`) REFERENCES `StaticTile` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `Synopsis`
+--
+
+DROP TABLE IF EXISTS `Synopsis`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+ SET character_set_client = utf8mb4 ;
+CREATE TABLE `Synopsis` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `NSIDE` int NOT NULL,
+  `PixAreaDeg` double NOT NULL,
+  `NumPix` int NOT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
@@ -441,4 +472,4 @@ CREATE TABLE `StaticTile_HealpixPixel` (
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2022-09-16 15:23:21
+-- Dump completed on 2022-10-05 10:55:07

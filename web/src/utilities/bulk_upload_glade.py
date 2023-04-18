@@ -4,12 +4,14 @@ import copy
 import healpy as hp
 import numpy as np
 from astropy.cosmology import z_at_value, FlatLambdaCDM
+import os
 
-from src.utilities.Database_Helpers import *
+# from src.utilities.Database_Helpers import *
+from web.src.utilities.Database_Helpers import *
 
-glade_catalog_in = "./galaxy_catalog_files/GLADE_2.4.txt"
-glade_catalog_mid = "./galaxy_catalog_files/GLADE_2.4.mid.txt"
-glade_catalog_out = "./galaxy_catalog_files/GLADE_2.4.out.txt"
+glade_catalog_in = "./web/src/utilities/galaxy_catalog_files/GLADE_2.4.dat"
+glade_catalog_mid = "./web/src/utilities/galaxy_catalog_files/GLADE_2.4.mid.dat"
+glade_catalog_out = "./web/src/utilities/galaxy_catalog_files/GLADE_2.4.out.dat"
 # reset output
 glade_H0 = 70.0
 glade_Om0 = 0.27
@@ -34,13 +36,15 @@ def get_B_luminosity_proxy(b_mag, z_dist):
     proxy = (z_dist**2)*(10.0**(-0.4*b_mag))
     return proxy
 
-transform_GLADE = True
+transform_GLADE = False
 if transform_GLADE:
     print("Processing GLADE catalog...")
-    with open(glade_catalog_mid, 'w') as reset_output:
-        reset_output.write("")
-    with open(glade_catalog_out, 'w') as reset_output:
-        reset_output.write("")
+    if os.path.exists(glade_catalog_mid):
+        with open(glade_catalog_mid, 'w') as reset_output:
+            reset_output.write("")
+    if os.path.exists(glade_catalog_out):
+        with open(glade_catalog_out, 'w') as reset_output:
+            reset_output.write("")
 
     t1 = time.time()
     row_count = 0

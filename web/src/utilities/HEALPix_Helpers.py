@@ -7,8 +7,13 @@ import math
 # from Tile import *
 # from ..objects.Tile import *
 # from ..objects.Pixel_Element import *
-from src.objects.Tile import *
-from src.objects.Pixel_Element import *
+
+# 2023-04-03 OLD
+# from src.objects.Tile import *
+# from src.objects.Pixel_Element import *
+# 2023-04-03 NEW
+from web.src.objects.Tile import *
+from web.src.objects.Pixel_Element import *
 
 from astropy.coordinates import Distance
 import healpy as hp

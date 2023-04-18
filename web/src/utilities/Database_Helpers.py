@@ -1,6 +1,7 @@
 import mysql.connector
 from mysql.connector import Error
 import MySQLdb as my
+# import mysqlclient as my
 from configparser import RawConfigParser
 import time
 import sys
@@ -9,6 +10,7 @@ import sys
 
 # configFile = '/opt/project/Settings.ini'
 configFile = 'Settings.ini'
+# configFile = '../Settings.ini'
 config = RawConfigParser()
 config.read(configFile)
 
@@ -21,7 +23,8 @@ db_port = config.get('database', 'DATABASE_PORT')
 def bulk_upload(query):
     success = False
     try:
-        conn = mysql.connector.connect(user=db_user, password=db_pwd, host=db_host, port=db_port, database=db_name)
+        conn = mysql.connector.connect(user=db_user, password=db_pwd, host=db_host, port=db_port, database=db_name,
+                                       allow_local_infile=True)
         cursor = conn.cursor()
         cursor.execute(query)
         conn.commit()
@@ -69,8 +72,9 @@ def query_db(query_list, commit=False):
 
             results.append(streamed_results)
 
-    except Error as e:
-        print('Error:', e)
+    # except Error as e:
+    except Exception as e:
+        print('Exception:', e)
     finally:
         cursor.close()
         db.close()
@@ -133,7 +137,8 @@ def insert_records(query, data):
     _tstart = time.time()
     success = False
     try:
-        conn = mysql.connector.connect(user=db_user, password=db_pwd, host=db_host, port=db_port, database=db_name)
+        conn = mysql.connector.connect(user=db_user, password=db_pwd, host=db_host, port=db_port, database=db_name,
+                                       allow_local_infile=True)
         cursor = conn.cursor()
         cursor.executemany(query, data)
 

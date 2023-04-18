@@ -185,7 +185,10 @@ class Teglon_Shape(metaclass=ABCMeta):
                     shifted_ra, shifted_dec = Teglon_Shape.get_coord_lists_transform(polygon_degree)
                     shifted_poly = geometry.Polygon(Teglon_Shape.get_coord_tuple_shift(shifted_ra, shifted_dec))
                     meridian = geometry.LineString([(360.0,90),(360.0, -90)])
-                    split_poly_collection = split(shifted_poly, meridian)
+
+
+                    # split_poly_collection = split(shifted_poly, meridian)
+                    split_poly_collection = list(split(shifted_poly, meridian).geoms) # https://shapely.readthedocs.io/en/stable/manual.html
 
                     if len(split_poly_collection) > 1:
 

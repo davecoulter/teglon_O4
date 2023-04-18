@@ -3,10 +3,19 @@ import multiprocessing as mp
 from scipy.special import erf
 # import healpy as hp
 from ligo.skymap import distance
-from src.objects.Detector import *
-from src.objects.Tile import *
-from src.objects.Pixel_Element import *
-from src.utilities.Database_Helpers import *
+
+# OLD 2023-04-04
+# from src.objects.Detector import *
+# from src.objects.Tile import *
+# from src.objects.Pixel_Element import *
+# from src.utilities.Database_Helpers import *
+
+# NEW 2023-04-04
+from web.src.objects.Detector import *
+from web.src.objects.Tile import *
+from web.src.objects.Pixel_Element import *
+from web.src.utilities.Database_Helpers import *
+
 import psutil
 import shutil
 import urllib.request
@@ -31,7 +40,7 @@ class Teglon:
         parser.add_option('--gw_id', default="", type="str",
                           help='LIGO superevent name, e.g. `S190425z` ')
 
-        parser.add_option('--healpix_dir', default='../../events/{GWID}', type="str",
+        parser.add_option('--healpix_dir', default='./web/events/{GWID}', type="str",
                           help='Directory for where to look for the healpix file (Default = ../Events/{GWID})')
 
         parser.add_option('--healpix_file', default="", type="str", help='healpix filename')
@@ -51,6 +60,9 @@ class Teglon:
         return (parser)
 
     def main(self):
+
+        utilities_base_dir = "./web/src/utilities"
+        pickle_output_dir = "%s/pickles/" % utilities_base_dir
 
         isDEBUG = False
         build_map = True
@@ -276,7 +288,7 @@ class Teglon:
             print("Unpacking '%s':%s..." % (self.options.gw_id, self.options.healpix_file))
             t1 = time.time()
 
-            orig_prob, orig_distmu, orig_distsigma, orig_distnorm, header_gen = hp.read_map(hpx_path, field=(0, 1, 2, 3), h=True)
+            (orig_prob, orig_distmu, orig_distsigma, orig_distnorm), header_gen = hp.read_map(hpx_path, field=(0, 1, 2, 3), h=True)
 
             header = dict(header_gen)
             orig_npix = len(orig_prob)
@@ -345,7 +357,7 @@ class Teglon:
         if not build_pixels:
             print("Skipping pixels...")
             print("\tLoading NSIDE 128 pixels...")
-            with open('N128_dict.pkl', 'rb') as handle:
+            with open(pickle_output_dir + 'N128_dict.pkl', 'rb') as handle:
                 N128_dict = pickle.load(handle)
                 del handle
 
@@ -514,7 +526,7 @@ class Teglon:
             print("Pixel select execution time: %s" % (t2 - t1))
             print("********* end DEBUG ***********\n")
 
-            with open('N128_dict.pkl', 'wb') as handle:
+            with open(pickle_output_dir + 'N128_dict.pkl', 'wb') as handle:
                 pickle.dump(N128_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
         if not build_tile_pixel_relation:
@@ -1100,7 +1112,7 @@ class Teglon:
             pixel_completeness_upload_csv = "%s/%s_pixel_completeness_upload.csv" % (
                 formatted_healpix_dir, self.options.gw_id)
             composed_completeness_dict = None
-            with open('../utilities/pickles/composed_completeness_dict.pkl', 'rb') as handle:
+            with open(pickle_output_dir + 'composed_completeness_dict.pkl', 'rb') as handle:
                 composed_completeness_dict = pickle.load(handle)
 
             pixel_completeness_records = []

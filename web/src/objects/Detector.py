@@ -13,9 +13,18 @@
 # from ligo.skymap import distance
 # from scipy.special import erf
 # import copy
-from src.objects.Tile import *
-from src.objects.Pixel_Element import *
-from src.objects.SQL_Polygon import *
+
+
+# 2023-04-03 OLD
+# from src.objects.Tile import *
+# from src.objects.Pixel_Element import *
+# from src.objects.SQL_Polygon import *
+
+# 2023-04-03 NEW
+from web.src.objects.Tile import *
+from web.src.objects.Pixel_Element import *
+from web.src.objects.SQL_Polygon import *
+
 # import pprint
 # import time
 import astropy.time
@@ -39,8 +48,12 @@ import pickle
 #
 # import multiprocessing as mp
 # from scipy import spatial
-from src.utilities.Database_Helpers import *
 
+# 2023-04-03 OLD
+# from src.utilities.Database_Helpers import *
+
+# 2023-04-03 NEW
+from web.src.utilities.Database_Helpers import *
 
 class Detector(Teglon_Shape):
 

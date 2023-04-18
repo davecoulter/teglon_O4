@@ -56,15 +56,25 @@ from ligo.skymap import distance
 # sys.path.append('./')
 
 
-from src.utilities.HEALPix_Helpers import *
-from src.utilities.Database_Helpers import *
+# Old
+# from src.utilities.HEALPix_Helpers import *
+# from src.utilities.Database_Helpers import *
+#
+# from src.objects.Detector import *
+# from src.objects.Tile import *
+# from src.objects.SQL_Polygon import *
+# from src.objects.Pixel_Element import *
+# from src.objects.Completeness_Objects import *
 
-from src.objects.Detector import *
-from src.objects.Tile import *
-from src.objects.SQL_Polygon import *
-from src.objects.Pixel_Element import *
-from src.objects.Completeness_Objects import *
+# NEW
+from web.src.utilities.HEALPix_Helpers import *
+from web.src.utilities.Database_Helpers import *
 
+from web.src.objects.Detector import *
+from web.src.objects.Tile import *
+from web.src.objects.SQL_Polygon import *
+from web.src.objects.Pixel_Element import *
+from web.src.objects.Completeness_Objects import *
 
 # from mpl_toolkits.basemap import Basemap
 
@@ -116,14 +126,23 @@ class Teglon:
 
     def main(self):
 
-        pickle_output_dir = "./pickles/"
+        configFile = './Settings.ini'
+        config = RawConfigParser()
+        config.read(configFile)
+
+        utilities_base_dir = "./web/src/utilities"
+        pickle_output_dir = "%s/pickles/" % utilities_base_dir
         if not os.path.exists(pickle_output_dir):
             os.makedirs(pickle_output_dir)
+        # Set up dustmaps config
+        # DC - Why is this directory set this way?
+        dustmaps_config["data_dir"] = utilities_base_dir
+
+
+
 
         print("Initializing database named: %s" % db_name)
 
-        # Set up dustmaps config
-        dustmaps_config["data_dir"] = "./"
 
         # Generate all pixel indices
         h = 0.7
@@ -239,8 +258,11 @@ class Teglon:
         if not self.options.build_skypixels:
             print("Skipping Sky Pixels...")
             print("\tLoading existing pixels...")
-            with open('./pickles/sky_pixels.pkl', 'rb') as handle:
-                sky_pixels = pickle.load(handle)
+            if os.path.exists(pickle_output_dir + "sky_pixels.pkl"):
+                with open(pickle_output_dir + "sky_pixels.pkl", 'rb') as handle:
+                    sky_pixels = pickle.load(handle)
+            else:
+                print('sky_pixels.pkl does not exist!')
         else:
             ## Build Sky Pixel Objects ##
             print("\n\nBuilding Sky Pixels...")
@@ -314,7 +336,7 @@ class Teglon:
 
                 sky_pixels[p_nside][p_index].id = db_id
 
-            with open('./pickles/sky_pixels.pkl', 'wb') as handle:
+            with open(pickle_output_dir + "sky_pixels.pkl", 'wb') as handle:
                 pickle.dump(sky_pixels, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
         ################################################
@@ -390,7 +412,6 @@ class Teglon:
                 raise("Error with INSERT! Exiting...")
 
             # Update base detectors with their polygon representation
-
             detector_select = '''
                 SELECT id, Name, Deg_width, Deg_height, Deg_radius FROM Detector;
             '''
@@ -435,10 +456,6 @@ class Teglon:
                     dec = float(ra_dec_list[1])
 
                     return ra, dec
-
-                configFile = '../../Settings.ini'
-                config = RawConfigParser()
-                config.read(configFile)
 
                 treasure_map_detectors = None
                 tm_api_token = config.get('treasuremap', 'TM_API_TOKEN')
@@ -571,8 +588,11 @@ class Teglon:
         if not self.options.build_MWE:
             print("Skipping MWE...")
             print("\tLoading existing EBV...")
-            with open('./pickles/ebv.pkl', 'rb') as handle:
-                ebv = pickle.load(handle)
+            if os.path.exists(pickle_output_dir + 'ebv.pkl'):
+                with open(pickle_output_dir + 'ebv.pkl', 'rb') as handle:
+                    ebv = pickle.load(handle)
+            else:
+                print('ebv.pkl does not exist!')
         else:
             ## Build E(B-V) Map ##
             print("\n\nBuilding MWE...")
@@ -609,7 +629,7 @@ class Teglon:
 
             batch_insert(mwe_insert, mwe_data)
 
-            with open('./pickles/ebv.pkl', 'wb') as handle:
+            with open(pickle_output_dir + 'ebv.pkl', 'wb') as handle:
                 pickle.dump(ebv, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
         ################################################
@@ -635,7 +655,7 @@ class Teglon:
             for i, (nside, pixel_dict) in enumerate(sky_pixels.items()):
                 queries_to_exe.append(insert_into_SP_G_query % (nside, nside))
 
-            query_db([queries_to_exe], commit=True)
+            query_db(queries_to_exe, commit=True)
 
         ################################################
 
@@ -720,7 +740,7 @@ class Teglon:
                 for pix_key, pix_val in current_completenesses.items():
                     pix_completenesses.append(pix_val[3])
 
-                smoothed_completeness = hp.sphtfunc.smoothing(pix_completenesses, fwhm=radian_radius, iter=1)
+                smoothed_completeness = hp.sphtfunc.smoothing(np.asarray(pix_completenesses), fwhm=radian_radius, iter=1)
 
                 for sc_index, sc in enumerate(smoothed_completeness):
                     current_completenesses[sc_index][4] = sc
@@ -732,44 +752,61 @@ class Teglon:
                 batch_insert(sky_completeness_insert, insert_completeness_data)
 
 
+        composed_completeness_dict = None
         if not self.options.compose_completeness:
             print("Skipping Compose Completeness...")
 
             if self.options.is_debug:
                 # Check that you can deserialize this...
-                composed_completeness_dict = None
-                with open('./pickles/composed_completeness_dict.pkl', 'rb') as handle:
-                    composed_completeness_dict = pickle.load(handle)
+                if os.path.exists(pickle_output_dir + 'composed_completeness_dict.pkl'):
+                    with open(pickle_output_dir + 'composed_completeness_dict.pkl', 'rb') as handle:
+                        composed_completeness_dict = pickle.load(handle)
+                else:
+                    print("composed_completeness_dict.pkl does not exist!")
         else:
+            print("Composing Completeness...")
             composed_completeness_dict = OrderedDict()
+
+            n128_ids = []
+            for pix_index, pix_ele in sky_pixels[nside128].items():
+                n128_ids.append(pix_ele.id)
 
             select_insert_completeness = '''
                         INSERT INTO CompletenessGrid (MeanDistance, SmoothedCompleteness, N128_SkyPixel_id)
-                        SELECT 
+                        SELECT
                             0.5*(sd.D1+sd.D2) as Dist, sc.SmoothedCompleteness, sp1.id as N128_id
-                        FROM SkyPixel sp1 
-                        JOIN SkyPixel sp2 on sp2.id = sp1.Parent_Pixel_id 
-                        JOIN SkyPixel sp3 on sp3.id = sp2.Parent_Pixel_id 
-                        JOIN SkyPixel sp4 on sp4.id = sp3.Parent_Pixel_id 
-                        JOIN SkyPixel sp5 on sp5.id = sp4.Parent_Pixel_id 
-                        JOIN SkyPixel sp6 on sp6.id = sp5.Parent_Pixel_id 
-                        JOIN SkyPixel sp7 on sp7.id = sp6.Parent_Pixel_id 
-                        JOIN SkyCompleteness sc on sc.SkyPixel_id in (sp1.id, sp2.id, sp3.id, sp4.id, sp5.id, sp6.id, sp7.id) 
-                        JOIN SkyDistance sd on sd.id = sc.SkyDistance_id 
+                        FROM SkyPixel sp1
+                        JOIN SkyPixel sp2 on sp2.id = sp1.Parent_Pixel_id
+                        JOIN SkyPixel sp3 on sp3.id = sp2.Parent_Pixel_id
+                        JOIN SkyPixel sp4 on sp4.id = sp3.Parent_Pixel_id
+                        JOIN SkyPixel sp5 on sp5.id = sp4.Parent_Pixel_id
+                        JOIN SkyPixel sp6 on sp6.id = sp5.Parent_Pixel_id
+                        JOIN SkyPixel sp7 on sp7.id = sp6.Parent_Pixel_id
+                        JOIN SkyCompleteness sc on sc.SkyPixel_id in (sp1.id, sp2.id, sp3.id, sp4.id, sp5.id, sp6.id, sp7.id)
+                        JOIN SkyDistance sd on sd.id = sc.SkyDistance_id
                         WHERE
-                            sp1.NSIDE = 128 AND
+                            sp1.id = %s AND 
                             sp2.NSIDE = 64 AND
                             sp3.NSIDE = 32 AND
                             sp4.NSIDE = 16 AND
                             sp5.NSIDE = 8 AND
                             sp6.NSIDE = 4 AND
-                            sp7.NSIDE = 2
-                        ORDER BY sp1.id, sd.D1;
+                            sp7.NSIDE = 2;
                         '''
-            query_db([select_insert_completeness], commit=True)
+
+
+            print("Executing INSERT to Completeness Grid...")
+            queries_to_exe = []
+            for n128_id in n128_ids:
+                queries_to_exe.append(select_insert_completeness % n128_id)
+
+            print("\t...sending %s queries" % len(queries_to_exe))
+            query_db(queries_to_exe, commit=True)
 
             select_composed_completeness = '''
-                SELECT id, MeanDistance, SmoothedCompleteness, N128_SkyPixel_id FROM CompletenessGrid;
+                SELECT id, MeanDistance, SmoothedCompleteness, N128_SkyPixel_id 
+                FROM CompletenessGrid 
+                ORDER BY N128_SkyPixel_id, MeanDistance;
             '''
 
             composed_completeness_result = query_db([select_composed_completeness])[0]
@@ -789,7 +826,7 @@ class Teglon:
                 composed_completeness_dict[key][0].append(np.inf)
                 composed_completeness_dict[key][1].append(0.0)
 
-            with open('./pickles/composed_completeness_dict.pkl', 'wb') as handle:
+            with open(pickle_output_dir + 'composed_completeness_dict.pkl', 'wb') as handle:
                 pickle.dump(composed_completeness_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
         ################################################
@@ -797,6 +834,7 @@ class Teglon:
         if not self.options.build_static_grids:
             print("Skipping Static Grids...")
         else:
+            print("Building Static Grids...")
 
             select_detect = '''
                 SELECT Name, ST_AsText(Poly), Deg_width, Deg_height, id FROM Detector WHERE Name='%s';

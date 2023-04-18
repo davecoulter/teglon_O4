@@ -1,5 +1,5 @@
-FROM davecoulter/astromini3:1.5
-LABEL description="Image for teglon debug"
+FROM python:bullseye
+LABEL description="Base Image for Teglon"
 LABEL maintainer="Dave Coulter (dcoulter@ucsc.edu)"
 
 SHELL ["/bin/bash", "-c"]
@@ -10,15 +10,11 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
 
-COPY ./requirements.api.txt /app/requirements.txt
+COPY ./requirements.txt /app/requirements.txt
 
-# If there are problems, remove astLib and htop... they aren't necessary right now
-RUN apt-get update
-
+RUN apt-get -y update
+RUN apt-get -y install default-libmysqlclient-dev
 RUN pip install --upgrade pip
-
 RUN pip install -r requirements.txt
-
 RUN apt-get clean && rm -rf /opt/conda/pkgs/*
-
 RUN rm -rf /var/lib/apt/lists/*

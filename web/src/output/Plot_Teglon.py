@@ -4,10 +4,10 @@ import os
 from astropy.time import Time
 from astropy.coordinates import get_sun
 
-from src.objects.Detector import *
-from src.objects.Tile import *
-from src.objects.Pixel_Element import *
-from src.utilities.Database_Helpers import *
+from web.src.objects.Detector import *
+from web.src.objects.Tile import *
+from web.src.objects.Pixel_Element import *
+from web.src.utilities.Database_Helpers import *
 
 isDEBUG = False
 
@@ -21,7 +21,7 @@ class Teglon:
         parser.add_option('--gw_id', default="", type="str",
                           help='LIGO superevent name, e.g. `S190425z` ')
 
-        parser.add_option('--healpix_dir', default='../../Events/{GWID}', type="str",
+        parser.add_option('--healpix_dir', default='./web/events/{GWID}', type="str",
                           help='Directory for where to look for the healpix file.')
 
         parser.add_option('--healpix_file', default="", type="str", help='Healpix filename.')
@@ -496,10 +496,18 @@ class Teglon:
 
         all_sky = coord.SkyCoord(RA, DEC, unit=(u.deg, u.deg))
         sun_positions = sun_coord.separation(all_sky)
+
+        # shifted_sun = m.shiftdata(all_sky, sun_positions, fix_wrap_around=True)
+
         sun_avoidance_contour = m.contour(RA, DEC, sun_positions, latlon=True, levels=[0.0, 60.0], colors='darkorange',
                                           alpha=1.0, zorder=9990, linewidths=0.5)
         sun_avoidance_contour_filled = m.contourf(RA, DEC, sun_positions, latlon=True, levels=[0.0, 60.0], colors='gold',
                                           alpha=0.3, zorder=9990, linewidths=0.5)
+        # sun_avoidance_contour = m.contour(RA, DEC, shifted_sun, latlon=True, levels=[0.0, 60.0], colors='darkorange',
+        #                                   alpha=1.0, zorder=9990, linewidths=0.5)
+        # sun_avoidance_contour_filled = m.contourf(RA, DEC, shifted_sun, latlon=True, levels=[0.0, 60.0],
+        #                                           colors='gold',
+        #                                           alpha=0.3, zorder=9990, linewidths=0.5)
 
         fmt = {}
         strs = [r'$60\degree$']
@@ -510,6 +518,7 @@ class Teglon:
                   inline_spacing=60, zorder=9999)
 
         x, y = m(sun_coord.ra.degree, sun_coord.dec.degree)
+        # Sun contours not working
         m.plot(x, y, color='gold', marker='o', markersize=10.0, markeredgecolor='darkorange', linewidth=0.25, zorder=9999)
 
 
@@ -539,7 +548,9 @@ class Teglon:
             # plt.annotate("%0.0f" % mer, xy=m(mer, 0), xycoords='data', color="silver", fontsize=14, zorder=9999)
             plt.annotate(ra_labels[mer], xy=m(mer+8.0, -30), xycoords='data', color="k", fontsize=14, zorder=9999)
         # # # ----------------------------------------------------------------
-        ax.invert_xaxis()
+
+        # DC: 2023-04-17 test
+        # ax.invert_xaxis()
 
         plt.ylabel(r'$\mathrm{Declination}$', fontsize=16, labelpad=5)
         plt.xlabel(r'$\mathrm{Right\;Ascension}$', fontsize=16, labelpad=5)

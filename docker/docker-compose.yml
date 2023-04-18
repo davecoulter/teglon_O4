@@ -1,38 +1,27 @@
 version: '3.8'
 services:
-    api:
-        container_name: gw_api
+    gw_api:
+        container_name: teglon_api
         build: .
-        image: "davecoulter/astromini3:1.6"
-#        command: python ./web/manage.py run -h 0.0.0.0
+        image: "davecoulter/teglon:0.0.1"
+#        command: python /app/web/manage.py run -h 0.0.0.0
         command: gunicorn --bind 0.0.0.0:5000 web.manage:app --timeout 1200
         volumes:
             - ${VOL_APP}:/app
             - ${VOL_CDBS}:/cdbs
-#        ports:
-#          - 5000:5000
-        expose:
-            - 5000
+        ports:
+          - 5000:5000
         links:
-            - db
+            - gw_db
         environment:
           PYSYN_CDBS: /cdbs/
-          CONDA_DEFAULT_ENV: base
-          _: /opt/conda/bin/python
-          CONDA_EXE: /opt/conda/bin/conda
-          SHLVL: 1
-          CONDA_PYTHON_EXE: /opt/conda/bin/python
-          CONDA_SHLVL: 1
-          CONDA_PROMPT_MODIFIER: (base)
-          PROJ_LIB: /opt/conda/share/proj
-          CONDA_PREFIX: /opt/conda
           FLASK_APP: web/project/__init__.py
           FLASK_DEBUG: 1
         depends_on:
-          db:
+          gw_db:
             condition: service_healthy
-    db:
-        container_name: gw_db
+    gw_db:
+        container_name: teglon_db
         image: "mysql:8.0.25"
         ports:
             - ${LOCAL_DB_PORT}:3306
@@ -40,7 +29,7 @@ services:
             - ${VOL_DB}:/var/lib/mysql
             - ./db_init/db_configuration:/etc/mysql/conf.d
             - ./db_init/init.sql:/docker-entrypoint-initdb.d/1.sql
-            - ./db_init/teglon_O4v4.sql:/docker-entrypoint-initdb.d/2.sql
+            - ./db_init/teglon_O4.sql:/docker-entrypoint-initdb.d/2.sql
             - ./db_init/angsep.sql:/docker-entrypoint-initdb.d/3.sql
             - ./db_init/teglon_users.sql:/docker-entrypoint-initdb.d/4.sql
             - ${VOL_DB_LOG}:/var/log/mysql
@@ -50,27 +39,19 @@ services:
           test: [ "CMD", "mysqladmin" ,"ping", "-h", "localhost" ]
           timeout: 20s
           retries: 10
-    script:
-      container_name: gw_scipt
-      image: "davecoulter/astromini3:1.5"
+    gw_script:
+      container_name: teglon_script
+      build: .
+      image: "davecoulter/teglon:0.0.1"
       volumes:
         - ${VOL_APP}:/app
         - ${VOL_CDBS}:/cdbs
       links:
-        - db
+        - gw_db
       environment:
         PYSYN_CDBS: /cdbs/
-        CONDA_DEFAULT_ENV: base
-        _: /opt/conda/bin/python
-        CONDA_EXE: /opt/conda/bin/conda
-        SHLVL: 1
-        CONDA_PYTHON_EXE: /opt/conda/bin/python
-        CONDA_SHLVL: 1
-        CONDA_PROMPT_MODIFIER: (base)
-        PROJ_LIB: /opt/conda/share/proj
-        CONDA_PREFIX: /opt/conda
       depends_on:
-        db:
+        gw_db:
           condition: service_healthy
     nginx:
       build:
@@ -81,4 +62,4 @@ services:
       ports:
         - 1337:80
       depends_on:
-        - api
+        - gw_api
