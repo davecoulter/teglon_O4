@@ -14,7 +14,7 @@ services:
         links:
             - gw_db
         environment:
-          PYSYN_CDBS: /cdbs/
+#          PYSYN_CDBS: /cdbs/
           FLASK_APP: web/project/__init__.py
           FLASK_DEBUG: 1
         depends_on:
@@ -49,7 +49,7 @@ services:
       links:
         - gw_db
       environment:
-        PYSYN_CDBS: /cdbs/
+#        PYSYN_CDBS: /cdbs/
       depends_on:
         gw_db:
           condition: service_healthy

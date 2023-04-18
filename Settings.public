@@ -1,0 +1,10 @@
+[database]
+DATABASE_NAME: teglon
+DATABASE_USER: teglon
+DATABASE_PASSWORD: 4tegl0n123!! # This is a debug pwd, should match teglon_users.sql
+DATABASE_HOST: gw_db
+DATABASE_PORT: 3306
+
+[treasuremap]
+TM_API_TOKEN: <You API token>
+TM_ENDPOINT: http://treasuremap.space/api/v0
