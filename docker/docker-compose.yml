@@ -8,7 +8,7 @@ services:
         command: gunicorn --bind 0.0.0.0:5000 web.manage:app --timeout 1200
         volumes:
             - ${VOL_APP}:/app
-            - ${VOL_CDBS}:/cdbs
+#            - ${VOL_CDBS}:/cdbs
         ports:
           - 5000:5000
         links:
@@ -45,7 +45,7 @@ services:
       image: "davecoulter/teglon:0.0.1"
       volumes:
         - ${VOL_APP}:/app
-        - ${VOL_CDBS}:/cdbs
+#        - ${VOL_CDBS}:/cdbs
       links:
         - gw_db
       environment:
