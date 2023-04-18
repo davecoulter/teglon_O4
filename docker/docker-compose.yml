@@ -2,6 +2,7 @@ version: '3.8'
 services:
     gw_api:
         container_name: teglon_api
+        platform: linux/amd64
         build: .
         image: "davecoulter/teglon:0.0.1"
 #        command: python /app/web/manage.py run -h 0.0.0.0
@@ -41,6 +42,7 @@ services:
           retries: 10
     gw_script:
       container_name: teglon_script
+      platform: linux/amd64
       build: .
       image: "davecoulter/teglon:0.0.1"
       volumes:
@@ -48,7 +50,7 @@ services:
 #        - ${VOL_CDBS}:/cdbs
       links:
         - gw_db
-      environment:
+#      environment:
 #        PYSYN_CDBS: /cdbs/
       depends_on:
         gw_db:
