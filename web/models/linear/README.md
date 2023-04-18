@@ -1,0 +1,1 @@
+This is where linear models (light curves) go for calculating model detection efficiencies.

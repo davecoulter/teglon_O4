@@ -5,6 +5,8 @@
 *.idea
 __pycache__/
 *.fits
+!SFD_dust_4096_ngp.fits
+!SFD_dust_4096_sgp.fits
 .env
 Settings.ini
 !*/requirements.txt
