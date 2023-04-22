@@ -23,6 +23,8 @@ import requests
 from bs4 import BeautifulSoup
 from dateutil.parser import parse
 
+from ligo.gracedb.rest import GraceDb
+
 initialize_start = time.time()
 
 def initialize_tile(tile):
@@ -63,6 +65,8 @@ class Teglon:
 
         utilities_base_dir = "./web/src/utilities"
         pickle_output_dir = "%s/pickles/" % utilities_base_dir
+
+        gdb_client = GraceDb("https://gracedb.ligo.org/api/")
 
         isDEBUG = False
         build_map = True
@@ -408,6 +412,11 @@ class Teglon:
             for n128 in N128_result:
                 N128_dict[int(n128[1])] = int(n128[0])
 
+            # N128_dict = {}
+            # with open(pickle_output_dir + 'N128_dict.pkl', 'rb') as handle:
+            #     N128_dict = pickle.load(handle)
+            #     del handle
+
             # Clean up N128_result
             print("freeing `N128_result`...")
             del N128_result
@@ -422,23 +431,47 @@ class Teglon:
             t1 = time.time()
             max_double_value = 1.5E+308
 
-            distmu[distmu > max_double_value] = max_double_value
-            distsigma[distsigma > max_double_value] = max_double_value
-            distnorm[distnorm > max_double_value] = max_double_value
+            from ligo.skymap.postprocess.util import find_greedy_credible_levels
+            percentiles = find_greedy_credible_levels(prob)
+            _90th_indices = np.where(percentiles <= 0.91)
 
-            mean, stddev, norm = distance.parameters_to_moments(distmu, distsigma)
+            windowed_prob = prob[_90th_indices]
+            windowed_distmu = distmu[_90th_indices]
+            windowed_distsigma = distsigma[_90th_indices]
+            windowed_distnorm = distnorm[_90th_indices]
+
+            # distmu[distmu > max_double_value] = max_double_value
+            # distsigma[distsigma > max_double_value] = max_double_value
+            # distnorm[distnorm > max_double_value] = max_double_value
+            #
+            # mean, stddev, norm = distance.parameters_to_moments(distmu, distsigma)
+            #
+            # mean[mean > max_double_value] = max_double_value
+            # stddev[stddev > max_double_value] = max_double_value
+            # norm[norm > max_double_value] = max_double_value
+
+            windowed_distmu[windowed_distmu > max_double_value] = max_double_value
+            windowed_distsigma[windowed_distsigma > max_double_value] = max_double_value
+            windowed_distnorm[windowed_distnorm > max_double_value] = max_double_value
+
+            mean, stddev, norm = distance.parameters_to_moments(windowed_distmu, windowed_distsigma)
 
             mean[mean > max_double_value] = max_double_value
             stddev[stddev > max_double_value] = max_double_value
             norm[norm > max_double_value] = max_double_value
 
-            theta, phi = hp.pix2ang(map_nside, range(len(prob)))
+            # theta, phi = hp.pix2ang(map_nside, range(len(prob)))
+            theta, phi = hp.pix2ang(map_nside, _90th_indices)
             N128_indices = hp.ang2pix(nside128, theta, phi)
 
             healpix_pixel_data = []
-            for i, n128_i in enumerate(N128_indices):
+            # for i, n128_i in enumerate(N128_indices):
+            for i, (pix_i, n128_i) in enumerate(zip(_90th_indices[0], N128_indices[0])):
                 N128_pixel_id = N128_dict[n128_i]
-                healpix_pixel_data.append((healpix_map_id, i, prob[i], distmu[i], distsigma[i], distnorm[i], mean[i],
+                # healpix_pixel_data.append((healpix_map_id, i, prob[i], distmu[i], distsigma[i], distnorm[i], mean[i],
+                #                            stddev[i], norm[i], N128_pixel_id))
+                healpix_pixel_data.append((healpix_map_id, pix_i, windowed_prob[i], windowed_distmu[i],
+                                           windowed_distsigma[i], windowed_distnorm[i], mean[i],
                                            stddev[i], norm[i], N128_pixel_id))
 
             # Clean up
@@ -579,7 +612,8 @@ class Teglon:
                 # Insert Tile/Healpix pixel relations
                 for t in initialized_swope_tiles:
                     for p in t.enclosed_pixel_indices:
-                        tile_pixel_data.append((t.id, map_pixel_dict[p][0]))
+                        if p in map_pixel_dict:
+                            tile_pixel_data.append((t.id, map_pixel_dict[p][0]))
 
                 # Create CSV
                 try:
@@ -608,7 +642,7 @@ class Teglon:
             if not self.options.skip_thacher:
                 ##### DO THACHER ######
                 # Get detector -> static tile rows
-                thacher_detector_result = query_db([select_detector % "SWOPE"])[0][0]
+                thacher_detector_result = query_db([select_detector % "THACHER"])[0][0]
                 thacher_id = thacher_detector_result[0]
                 thacher_name = thacher_detector_result[1]
                 thacher_poly = thacher_detector_result[2]
@@ -643,7 +677,8 @@ class Teglon:
                 # Insert Tile/Healpix pixel relations
                 for t in initialized_thacher_tiles:
                     for p in t.enclosed_pixel_indices:
-                        tile_pixel_data.append((t.id, map_pixel_dict[p][0]))
+                        if p in map_pixel_dict:
+                            tile_pixel_data.append((t.id, map_pixel_dict[p][0]))
 
                 # Append to existing CSV, upload, and clean up CSV
                 try:
@@ -1197,16 +1232,31 @@ class Teglon:
 
             t1 = time.time()
             # Set & Retrieve NetProbToGalaxies
+            # healpix_map_NetProbToGalaxies_update = '''
+            #     UPDATE HealpixMap hm
+            #     SET NetProbToGalaxies = (SELECT 1-SUM(hpc.Renorm2DProb)
+            #                              FROM HealpixPixel_Completeness hpc
+            #                              WHERE HealpixMap_id = %s
+            #                             )
+            #     WHERE hm.id = %s;
+            # '''
+
+            total_pixel_prob_select = '''
+                SELECT SUM(Prob) FROM HealpixPixel WHERE HealpixMap_id = %s
+            '''
+            total_pixel_prob = float(query_db([total_pixel_prob_select % healpix_map_id])[0][0][0])
+
+
             healpix_map_NetProbToGalaxies_update = '''
                 UPDATE HealpixMap hm
-                SET NetProbToGalaxies = (SELECT 1-SUM(hpc.Renorm2DProb) 
+                SET NetProbToGalaxies = (SELECT %s-SUM(hpc.Renorm2DProb) 
                                          FROM HealpixPixel_Completeness hpc 
                                          WHERE HealpixMap_id = %s
                                         )
                 WHERE hm.id = %s;
             '''
 
-            query_db([healpix_map_NetProbToGalaxies_update % (healpix_map_id, healpix_map_id)], commit=True)
+            query_db([healpix_map_NetProbToGalaxies_update % (total_pixel_prob, healpix_map_id, healpix_map_id)], commit=True)
 
             select_NetProbToGalaxies = "SELECT NetProbToGalaxies FROM HealpixMap WHERE id = %s"
             select_NetProbToGalaxies_result = query_db([select_NetProbToGalaxies % healpix_map_id])[0]

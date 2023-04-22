@@ -743,7 +743,15 @@ class Teglon:
                 smoothed_completeness = hp.sphtfunc.smoothing(np.asarray(pix_completenesses), fwhm=radian_radius, iter=1)
 
                 for sc_index, sc in enumerate(smoothed_completeness):
-                    current_completenesses[sc_index][4] = sc
+
+                    # Smoothing can introduce unphysical completeness values; fix this.
+                    recitified_smoothed_completeness = sc
+                    if sc < 0.0:
+                        recitified_smoothed_completeness = 0.0
+                    elif sc > 1.0:
+                        recitified_smoothed_completeness = 1.0
+
+                    current_completenesses[sc_index][4] = recitified_smoothed_completeness
 
                 insert_completeness_data = []
                 for sp_key, sp_value in current_completenesses.items():

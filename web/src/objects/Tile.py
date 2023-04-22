@@ -138,3 +138,19 @@ class Tile(Teglon_Shape):
             x2, y2 = bmap(ra_deg, dec_deg)
             lat_lons = np.vstack([x2, y2]).transpose()
             ax_to_plot.add_patch(Polygon(lat_lons, **kwargs))
+
+
+    # DEBUG DAVE
+    def plot2(self, ax_to_plot, **kwargs):
+
+        query_polygon = self.query_polygon
+        for p in query_polygon:
+            ra_deg, dec_deg = zip(*[(coord_deg[0], coord_deg[1])
+                                    for coord_deg in p.exterior.coords])
+
+            list_o_coords = []
+            for x, y in zip(ra_deg, dec_deg):
+                list_o_coords.append((x, y))
+            arr = np.asarray(list_o_coords)
+
+            ax_to_plot.add_patch(Polygon(arr, transform=ax_to_plot.get_transform('world'), **kwargs))

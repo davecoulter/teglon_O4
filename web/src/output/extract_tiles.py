@@ -370,6 +370,7 @@ class Teglon:
                     st._Dec BETWEEN d.MinDec AND d.MaxDec 
                 ORDER BY 
                     running_tile_prob.net_prob DESC 
+                LIMIT 1,1000
                 '''
 
         # 2D NON-BOX QUERY
@@ -427,6 +428,7 @@ class Teglon:
                     st._Dec BETWEEN d.MinDec AND d.MaxDec 
                 ORDER BY 
                     running_tile_prob.net_prob DESC 
+                LIMIT 1,1000;
             '''
 
         # 4D BOX QUERY
@@ -486,6 +488,7 @@ class Teglon:
                     st._Dec BETWEEN %s AND %s 
                 ORDER BY 
                     running_tile_prob.net_prob DESC 
+                LIMIT 1,1000;
                 '''
 
         # 2D BOX QUERY
@@ -544,6 +547,7 @@ class Teglon:
                     st._Dec BETWEEN %s AND %s 
                 ORDER BY 
                     running_tile_prob.net_prob DESC 
+                LIMIT 1,1000;
                 '''
 
         # GALAXIES SELECT
@@ -570,7 +574,9 @@ class Teglon:
             WHERE 
                 hp.HealpixMap_id = %s AND 
                 sp_ebv.EBV*%s <= %s AND 
-                g._Dec BETWEEN %s AND %s; 
+                g._Dec BETWEEN %s AND %s
+            ORDER BY hp_g_w.GalaxyProb DESC
+            LIMIT 1,1000; 
         '''
 
         # galaxies_select = '''
@@ -624,7 +630,9 @@ class Teglon:
                 hp.HealpixMap_id = %s AND 
                 sp_ebv.EBV*%s <= %s AND 
                 g.RA BETWEEN %s AND %s AND 
-                g._Dec BETWEEN %s AND %s; 
+                g._Dec BETWEEN %s AND %s
+            ORDER BY hp_g_w.GalaxyProb DESC
+            LIMIT 1,1000; 
         '''
         # box_galaxies_select = '''
         #         SELECT
@@ -906,11 +914,11 @@ class Teglon:
                     Name_2MASS = row[3]
 
                     field_name = ""
-                    if Name_GWGC is not None:
+                    if Name_GWGC != 'null':
                         field_name = Name_GWGC
-                    elif Name_HyperLEDA is not None:
+                    elif Name_HyperLEDA != 'null':
                         field_name = "LEDA" + Name_HyperLEDA
-                    elif Name_2MASS is not None:
+                    elif Name_2MASS != 'null':
                         field_name = Name_2MASS
 
                     if field_name == "":

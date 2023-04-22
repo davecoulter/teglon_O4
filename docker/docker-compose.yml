@@ -1,11 +1,10 @@
 version: '3.8'
 services:
-    gw_api:
-        container_name: teglon_api
+    gw_api_prod:
+        container_name: teglon_api_prod
         platform: linux/amd64
         build: .
         image: "davecoulter/teglon:0.0.1"
-#        command: python /app/web/manage.py run -h 0.0.0.0
         command: gunicorn --bind 0.0.0.0:5000 web.manage:app --timeout 1200
         volumes:
             - ${VOL_APP}:/app
@@ -21,6 +20,27 @@ services:
         depends_on:
           gw_db:
             condition: service_healthy
+    gw_api_dev:
+      container_name: teglon_api_debug
+      platform: linux/amd64
+      build: .
+      image: "davecoulter/teglon:0.0.1"
+      command: python /app/web/manage.py run -h 0.0.0.0
+#      command: gunicorn --bind 0.0.0.0:5000 web.manage:app --timeout 1200
+      volumes:
+        - ${VOL_APP}:/app
+      #            - ${VOL_CDBS}:/cdbs
+      ports:
+        - 5000:5000
+      links:
+        - gw_db
+      environment:
+        #          PYSYN_CDBS: /cdbs/
+        FLASK_APP: web/project/__init__.py
+        FLASK_DEBUG: 1
+      depends_on:
+        gw_db:
+          condition: service_healthy
     gw_db:
         container_name: teglon_db
         image: "mysql:8.0.25"
@@ -47,15 +67,22 @@ services:
       image: "davecoulter/teglon:0.0.1"
       volumes:
         - ${VOL_APP}:/app
-#        - ${VOL_CDBS}:/cdbs
+        - ${VOL_CDBS}:/cdbs
       links:
         - gw_db
-#      environment:
-#        PYSYN_CDBS: /cdbs/
+      environment:
+        PYSYN_CDBS: /cdbs/
       depends_on:
         gw_db:
           condition: service_healthy
-    nginx:
+    gw_dev:
+      container_name: teglon_dev
+      platform: linux/amd64
+      build: .
+      image: "davecoulter/teglon:0.0.1"
+      volumes:
+        - ${VOL_APP}:/app
+    nginx_prod:
       build:
           context: .
           dockerfile: Dockerfile.nginx
@@ -64,4 +91,14 @@ services:
       ports:
         - 1337:80
       depends_on:
-        - gw_api
+        - gw_api_prod
+    nginx_dev:
+      build:
+        context: .
+        dockerfile: Dockerfile.nginx
+      volumes:
+        - ${VOL_APP}:/app/
+      ports:
+        - 1337:80
+      depends_on:
+        - gw_api_dev

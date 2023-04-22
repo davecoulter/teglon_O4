@@ -71,11 +71,11 @@ from ligo.skymap import distance
 # from Pixel_Element import *
 # from Completeness_Objects import *
 
-from src.objects.Detector import *
-from src.objects.Tile import *
+from web.src.objects.Detector import *
+from web.src.objects.Tile import *
 # from src.objects.SQL_Polygon import *
-from src.objects.Pixel_Element import *
-from src.utilities.Database_Helpers import *
+from web.src.objects.Pixel_Element import *
+from web.src.utilities.Database_Helpers import *
 
 
 import psutil
@@ -91,8 +91,8 @@ import json
 
 import MySQLdb as my
 
-from spherical_geometry.polygon import SphericalPolygon
-import ephem
+# from spherical_geometry.polygon import SphericalPolygon
+# import ephem
 from datetime import datetime, timezone, timedelta
 
 from astropy.coordinates import SkyCoord, EarthLocation, AltAz, ICRS
@@ -103,11 +103,15 @@ from astropy.coordinates import get_sun
 import matplotlib.animation as animation
 from matplotlib.pyplot import cm
 
+import ligo.skymap.plot
+from ligo.skymap.postprocess.util import find_greedy_credible_levels
+
 isDEBUG = False
 
 
 # Set up dustmaps config
-dustmaps_config["data_dir"] = "./"
+utilities_base_dir = "./web/src/utilities"
+dustmaps_config["data_dir"] = utilities_base_dir
 
 # Generate all pixel indices
 cosmo = LambdaCDM(H0=70, Om0=0.3, Ode0=0.7)
@@ -131,7 +135,7 @@ class Teglon:
         parser.add_option('--gw_id', default="", type="str",
                           help='LIGO superevent name, e.g. `S190425z` ')
 
-        parser.add_option('--healpix_dir', default='../../Events/{GWID}', type="str",
+        parser.add_option('--healpix_dir', default='./web/events/{GWID}', type="str",
                           help='Directory for where to look for the healpix file.')
 
         parser.add_option('--healpix_file', default="", type="str", help='Healpix filename.')
@@ -169,20 +173,185 @@ class Teglon:
 
     def main(self):
 
-        map_pix = query_db(["SELECT Pixel_Index, Prob FROM HealpixPixel Order By Pixel_Index"])[0]
-        allsky = np.arange(0, 12*256**2)
-        map_pix_arr = np.asarray([mp[0] for mp in map_pix])
+        fig = plt.figure()
+        ax_h = plt.axes(projection='astro hours mollweide')
+        ax_h.grid()
 
-        # Plot!!
-        fig = plt.figure(figsize=(10, 10), dpi=800)
-        ax = fig.add_subplot(111)
-        m = Basemap(projection='moll', lon_0=180.0)
+        # (orig_prob, orig_distmu, orig_distsigma, orig_distnorm), header_gen = hp.read_map("./web/events/S190425z/GW190425_PublicationSamples_flattened.fits.gz", field=(0, 1, 2, 3),
+        #                                                                                 h=True)
+        # _90_50_levels = find_greedy_credible_levels(orig_prob)
 
-        hp.mollview(map_pix_arr, fig=plt.gcf().number, cmap=plt.cm.Greens)
+        healpix_map_select = "SELECT id, RescaledNSIDE, t_0 FROM HealpixMap WHERE GWID = '%s' and Filename = '%s'"
+        healpix_map_result = query_db([healpix_map_select % (self.options.gw_id, self.options.healpix_file)])[0][0]
+        healpix_map_id = int(healpix_map_result[0])
+        healpix_map_event_time = Time(healpix_map_result[2], format="gps")
+        healpix_map_nside = int(healpix_map_result[1])
 
-        fig.savefig("test_fig.png", bbox_inches='tight')  # ,dpi=840
+        select_2D_pix = '''
+            SELECT
+                hp.id,
+                hp.HealpixMap_id,
+                hp.Pixel_Index,
+                hp.Prob,
+                hp.Distmu,
+                hp.Distsigma,
+                hp.Mean,
+                hp.Stddev,
+                hp.Norm,
+                hp.N128_SkyPixel_id
+            FROM HealpixPixel hp
+            WHERE hp.HealpixMap_id = %s
+        '''
+
+        pixels_to_select = select_2D_pix % healpix_map_id
+        map_pix_result = query_db([pixels_to_select])[0]
+
+        map_pix_dict = {int(mpr[2]): float(mpr[3]) for mpr in map_pix_result }
+
+        num_pix = hp.nside2npix(healpix_map_nside)
+        # map_pix = list(np.arange(num_pix))
+        map_pix = np.zeros(num_pix)
+        for i, mp in enumerate(map_pix):
+            if i in map_pix_dict:
+                map_pix[i] = map_pix_dict[i]
+        # for mpr in map_pix_result:
+        #     map_pix[int(mpr[2])] = float(mpr[3])
+
+        _90_50_levels = find_greedy_credible_levels(np.asarray(map_pix))
+
+        # Probability
+        ax_h.contourf_hpx(_90_50_levels, cmap='OrRd', levels=[0.0, 0.5, 0.9], linewidths=0.2, alpha=0.3)
+        ax_h.contour_hpx(_90_50_levels, cmap='OrRd', levels=[0.0, 0.5, 0.9], linewidths=0.2, alpha=0.3)
+        # ax_h.contourf_hpx(_90_50_levels, cmap='OrRd', linewidths=0.2, alpha=0.3)
+        # ax_h.contour_hpx(_90_50_levels, cmap='OrRd', linewidths=0.2, alpha=0.3)
+
+        # Dust
+        select_mwe_pix = '''
+            SELECT
+                sp.Pixel_Index, 
+                sp_ebv.EBV*(SELECT b.F99_Coefficient FROM Band b WHERE `Name`='SDSS r')
+            FROM
+                SkyPixel sp
+            JOIN SkyPixel_EBV sp_ebv on sp_ebv.N128_SkyPixel_id = sp.id
+            # WHERE 
+            #     sp_ebv.EBV*(SELECT b.F99_Coefficient FROM Band b WHERE `Name`='SDSS r') > 0.5
+            ORDER BY 
+                sp.Pixel_Index;
+        '''
+
+        mwe_pix_result = query_db([select_mwe_pix])[0]
+        mwe_hpx_arr = []
+        for mp in mwe_pix_result:
+            mwe_hpx_arr.append(float(mp[1]))
+        ax_h.contour_hpx(np.asarray(mwe_hpx_arr), colors='dodgerblue', levels=[0.5, np.max(mwe_hpx_arr)],
+                         linewidths=0.2, alpha=0.5)
+        ax_h.contourf_hpx(np.asarray(mwe_hpx_arr), cmap='Blues', levels=[0.5, np.max(mwe_hpx_arr)], linewidths=0.2,
+                          alpha=0.3)
+
+
+        # Pointings
+        telescope_name = "SWOPE"
+        detector_select_by_name = "SELECT id, Name, Deg_width, Deg_height, Deg_radius, Area, MinDec, MaxDec, ST_AsText(Poly) FROM Detector WHERE Name='%s'"
+        detector_result = query_db([detector_select_by_name % telescope_name])[0][0]
+        detector_id = int(detector_result[0])
+        detector_name = detector_result[1]
+        detector_poly = detector_result[8]
+        detector_vertices = Detector.get_detector_vertices_from_teglon_db(detector_poly)
+        detector = Detector(detector_name, detector_vertices, detector_id=detector_id)
+        #
+        formatted_healpix_dir = self.options.healpix_dir
+        formatted_healpix_dir = formatted_healpix_dir.replace("{GWID}", self.options.gw_id)
+        tile_file_path = "%s/%s" % (formatted_healpix_dir, self.options.tile_file)
+        tiles_to_plot = []
+
+
+
+        with open('%s' % tile_file_path, 'r') as csvfile:
+            csvreader = csv.reader(csvfile, delimiter=',', skipinitialspace=True)
+            # Skip Header
+            next(csvreader)
+
+            for row in csvreader:
+                name = row[0]
+                c = coord.SkyCoord(row[1], row[2], unit=(u.hour, u.deg))
+                t = Tile(c.ra.degree, c.dec.degree, detector=detector, nside=healpix_map_nside)
+
+                t.field_name = name
+                t.net_prob = float(row[6])
+                tiles_to_plot.append(t)
+
+        from matplotlib import colors
+        tile_probs = [t.net_prob for t in tiles_to_plot[0:1000]]
+        min_prob = np.min(tile_probs)
+        max_prob = np.max(tile_probs)
+        print("min prob: %s" % min_prob)
+        print("max prob: %s" % max_prob)
+
+        clr_norm = colors.LogNorm(min_prob, max_prob)
+
+        # This is an arbitrary # to plot... but they're sorted by highest prob first, and we'll never get 1000 pointings
+        for i, t in enumerate(tiles_to_plot[0:1000]):
+            # HACK - protecting against plotting errs
+            if t.ra_deg < 358 and t.ra_deg > 2:
+                t.plot2(ax_h, edgecolor='k',
+                        facecolor=plt.cm.Greens(clr_norm(t.net_prob)),
+                        linewidth=0.1, alpha=1.0, zorder=9999) #
+
+
+        # Sun
+        from astroplan import Observer, AirmassConstraint
+        from astropy.coordinates import AltAz, EarthLocation
+
+        time_of_trigger = Time(healpix_map_event_time.to_datetime(), scale="utc")
+        observatory = Observer.at_site("LCO")
+        sun_set = observatory.sun_set_time(time_of_trigger, which='nearest', horizon=-18 * u.deg)
+        sun_rise = observatory.sun_rise_time(sun_set, which='next', horizon=-18 * u.deg)
+        sun_coord = get_sun(sun_set)
+
+        hours_of_the_night = int((sun_rise - sun_set).to_value('hr'))
+        observatory_location = EarthLocation(lat=-29.0146 * u.deg, lon=-70.6926 * u.deg, height=2380 * u.m)
+        time_next = sun_set
+
+        theta, phi = hp.pix2ang(nside=64, ipix=np.arange(hp.nside2npix(64)))
+        ra = np.rad2deg(phi)
+        dec = np.rad2deg(0.5 * np.pi - theta)
+        all_sky_coords = coord.SkyCoord(ra=ra, dec=dec, unit=(u.deg, u.deg))
+
+        sun_separations = sun_coord.separation(all_sky_coords)
+        deg_sep = np.asarray([sp.deg for sp in sun_separations])
+
+        ax_h.contour_hpx(deg_sep, colors='darkorange', levels=[0, 60.0], alpha=0.5, linewidths=0.2)
+        ax_h.contourf_hpx(deg_sep, colors='gold', levels=[0, 60.0], linewidths=0.2, alpha=0.3)
+        # fmt = {}
+        # strs = [r'$60\degree$']
+        # for l, s in zip(sun_avoidance_contour.levels, strs):
+        #     fmt[l] = s
+        # c_labels = ax_h.clabel(sun_avoidance_contour, inline=True, fontsize=10, fmt=fmt,
+        #                      levels=sun_avoidance_contour.levels, colors='k', use_clabeltext=True,
+        #                      inline_spacing=60, zorder=9999)
+
+        ax_h.plot(sun_coord.ra.degree, sun_coord.dec.degree, transform=ax_h.get_transform('world'), marker="o",
+                  markersize=10, markeredgecolor="darkorange", markerfacecolor="gold", linewidth=0.05)
+
+
+        # Swope Airmass constraints
+        net_airmass = all_sky_coords.transform_to(AltAz(obstime=sun_set, location=observatory_location)).secz
+        for i in np.arange(hours_of_the_night):
+            time_next += timedelta(1/24.)
+            temp = all_sky_coords.transform_to(AltAz(obstime=time_next, location=observatory_location)).secz
+            temp_index = np.where((temp >= 1.0) & (temp <= 2.0))
+            net_airmass[temp_index] = 1.5
+
+        ax_h.contourf_hpx(net_airmass, colors='gray', levels=[np.min(net_airmass), 1.0], linewidths=0.2, alpha=0.3)
+        ax_h.contourf_hpx(net_airmass, colors='gray', levels=[2.0, np.max(net_airmass)], linewidths=0.2, alpha=0.3)
+
+
+
+        fig.savefig("./web/events/S190425z/test_fig.svg", bbox_inches='tight', format="svg")  # ,dpi=840
         plt.close('all')
         print("... Done.")
+
+
 
 
 if __name__ == "__main__":
