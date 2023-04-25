@@ -26,6 +26,9 @@ class Teglon:
         parser.add_option('--t_band', default="r", type="str",
                           help='Filter for Thacher tile extract to use for extinction calculation. Default: `r`. Available: (g, r, i)')
 
+        parser.add_option('--t80_band', default="r", type="str",
+                          help='Filter for Thacher tile extract to use for extinction calculation. Default: `r`. Available: (g, r, i)')
+
         parser.add_option('--g_band', default="r", type="str",
                           help='Filter for Galaxies extract to use for extinction calculation. Default: `r`. Available: (g, r, i)')
 
@@ -33,6 +36,9 @@ class Teglon:
                           help='Exposure time (seconds) to write out for Swope. Default: `60.0`; if <= 0.0, skip telescope')
 
         parser.add_option('--t_exp_time', default="120.0", type="float",
+                          help='Exposure time (seconds) to write out for Thacher. Default: `120.0`; if <= 0.0, skip telescope')
+
+        parser.add_option('--t80_exp_time', default="45.0", type="float",
                           help='Exposure time (seconds) to write out for Thacher. Default: `120.0`; if <= 0.0, skip telescope')
 
         parser.add_option('--g_exp_time', default="120.0", type="float",
@@ -48,6 +54,9 @@ class Teglon:
                           help='Cumulative prob to cover in tiles for Swope. Default 0.9. Must be > 0.2 and < 0.95')
 
         parser.add_option('--t_cum_prob', default="0.9", type="float",
+                          help='Cumulative prob to cover in tiles for Thacher. Default 0.9. Must be > 0.2 and < 0.95')
+
+        parser.add_option('--t80_cum_prob', default="0.9", type="float",
                           help='Cumulative prob to cover in tiles for Thacher. Default 0.9. Must be > 0.2 and < 0.95')
 
         parser.add_option('--num_gal', default="10000", type="int",
@@ -155,7 +164,8 @@ class Teglon:
             "THACHER",
             "SWOPE",
             "NICKEL",
-            "SINISTRO"
+            "SINISTRO",
+            "T80S_T80S-Cam"
         }
 
         band_mapping = {
@@ -665,6 +675,7 @@ class Teglon:
 
         SWOPE = "SWOPE"
         THACHER = "THACHER"
+        T80 = "T80S_T80S-Cam"
         GALAXY = self.options.galaxies_detector
 
         # Function used in serializing output
@@ -686,6 +697,7 @@ class Teglon:
         hpx_path = "%s/%s" % (formatted_healpix_dir, self.options.healpix_file)
         s_band_name = band_mapping[self.options.s_band]
         t_band_name = band_mapping[self.options.t_band]
+        t80_band_name = band_mapping[self.options.t_band]
         g_band_name = band_mapping[self.options.g_band]
 
         healpix_map_id = int(query_db([healpix_map_select % (self.options.gw_id, self.options.healpix_file)])[0][0][0])
@@ -852,6 +864,82 @@ class Teglon:
                     csvwriter.writerow(cols)
 
                 print("Done writing out %s" % THACHER)
+
+            print("Extracting T80...")
+            t_detector_result = query_db([detector_select_by_name % T80])[0][0]
+            t_detector_id = int(t_detector_result[0])
+
+            t_band_result = query_db([band_select % t_band_name])[0][0]
+            t_band_F99 = float(t_band_result[2])
+
+            t_select_to_execute = ""
+            if is_Thacher_box_query:
+                t_formatted_output_path = box_file_formatter % (
+                formatted_healpix_dir, THACHER, self.options.prob_type,
+                self.options.t_cum_prob,
+                self.options.healpix_file.replace(",", "_"))
+                if self.options.prob_type == _4D:
+                    t_select_to_execute = box_tile_select_4D % (t_band_F99, t_detector_id, healpix_map_id,
+                                                                self.options.t_cum_prob, t_band_F99,
+                                                                self.options.extinct,
+                                                                self.options.t_min_ra, self.options.t_max_ra,
+                                                                self.options.t_min_dec, self.options.t_max_dec)
+                else:
+                    t_select_to_execute = box_tile_select_2D % (t_band_F99, t_detector_id, healpix_map_id,
+                                                                self.options.t_cum_prob, t_band_F99,
+                                                                self.options.extinct,
+                                                                self.options.t_min_ra, self.options.t_max_ra,
+                                                                self.options.t_min_dec, self.options.t_max_dec)
+            else:
+                t_formatted_output_path = non_box_file_formatter % (
+                    formatted_healpix_dir, T80, self.options.prob_type,
+                    self.options.t_cum_prob,
+                    self.options.healpix_file.replace(",", "_"))
+                if self.options.prob_type == _4D:
+                    t_select_to_execute = tile_select_4D % (t_band_F99, t_detector_id, healpix_map_id,
+                                                            self.options.t_cum_prob, t_band_F99,
+                                                            self.options.extinct)
+                else:
+                    t_select_to_execute = tile_select_2D % (t_band_F99, t_detector_id, healpix_map_id,
+                                                            self.options.t_cum_prob, t_band_F99,
+                                                            self.options.extinct)
+
+            t_tile_result = query_db([t_select_to_execute])[0]
+
+            with open(t_formatted_output_path, 'w') as csvfile:
+                csvwriter = csv.writer(csvfile)
+
+                cols = []
+                cols.append('# FieldName')
+                cols.append('FieldRA')
+                cols.append('FieldDec')
+                cols.append('Telscope')
+                cols.append('Filter')
+                cols.append('ExpTime')
+                cols.append('Priority')
+                cols.append('Status')
+                cols.append('A_lambda')
+                csvwriter.writerow(cols)
+
+                for i, row in enumerate(t_tile_result):
+                    c = coord.SkyCoord(row[2], row[3], unit=(u.deg, u.deg))
+                    coord_str = GetSexigesimalString(c)
+
+                    cols = []
+
+                    cols.append(row[1])
+                    cols.append(coord_str[0])
+                    cols.append(coord_str[1])
+                    cols.append(T80)
+                    cols.append(self.options.t_band)
+                    cols.append(str(self.options.t_exp_time))
+                    cols.append(row[4])
+                    cols.append('False')
+                    cols.append("%0.3f" % float(row[6]))
+                    csvwriter.writerow(cols)
+
+                print("Done writing out %s" % T80)
+
 
         if doGalaxies:
             print("Extracting Galaxies for %s..." % GALAXY)

@@ -33,6 +33,10 @@ def bulk_upload(query):
     except Error as e:
         print("Error in uploading CSV!")
         print(e)
+    except Exception as e:
+        print("Error in uploading CSV!")
+        print(e)
+        test = 1
     finally:
         cursor.close()
         conn.close()

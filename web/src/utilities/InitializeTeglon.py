@@ -124,6 +124,91 @@ class Teglon:
 
         return (parser)
 
+    def generate_static_grid_inserts(self, detector_name_list, ebv_dict, skypixel_dict):
+
+        detector_prefixes = {
+            "SWOPE": "S",
+            "THACHER": "T",
+            "T80S_T80S-Cam": "T80_"
+        }
+
+        # Sanity - check if this is a supported detector, else return
+        for detector_name in detector_name_list:
+            if detector_name not in detector_prefixes:
+                print("Unsupported detector! `%s`" % detector_name)
+                return 1
+
+        static_grid_nside = 128
+        select_detect = '''
+                        SELECT
+                            Name, ST_AsText(Poly), Deg_width,
+                            Deg_height, id, MinDec, MaxDec
+                        FROM Detector
+                        WHERE Name='%s';
+                    '''
+        insert_static_tile = '''INSERT INTO StaticTile (Detector_id, FieldName, RA, _Dec, Coord, Poly, EBV, N128_SkyPixel_id) 
+                    VALUES (%s, %s, %s, %s, ST_PointFromText(%s, 4326), ST_GEOMFROMTEXT(%s, 4326), %s, %s)'''
+
+
+        tiles = []
+        for detector_name in detector_name_list:
+            print("Building `%s` coordinate grid ..." % detector_name)
+            detector_result = query_db([select_detect % detector_name])[0][0]
+            detector_vertices = Detector.get_detector_vertices_from_teglon_db(detector_result[1])
+            detector_id = int(detector_result[4])
+            detector_min_dec = float(detector_result[5])
+            detector_max_dec = float(detector_result[6])
+            detector = Detector(detector_name=detector_name, detector_vertex_list_collection=detector_vertices,
+                             detector_width_deg=detector_result[2], detector_height_deg=detector_result[3],
+                             detector_id=detector_id)
+
+            t1 = time.time()
+            allsky_detector_coords = Cartographer.generate_all_sky_coords(detector)
+            t2 = time.time()
+            print("\n********* start DEBUG ***********")
+            print("`%s` Coordinate grid creation - execution time: %s" % (detector_name, (t2 - t1)))
+            print("********* end DEBUG ***********\n")
+
+            print("Building `%s` tiles ..." % detector_name)
+            t1 = time.time()
+            for i, c in enumerate(allsky_detector_coords):
+                # only include pointings that the telescope can reach
+                if c[1] >= detector_min_dec and c[1] <= detector_max_dec:
+                    t = Tile(c[0], c[1], detector, static_grid_nside)
+                    t.field_name = "{detector_prefix}{field_number}".format(detector_prefix=detector_prefixes[detector_name],
+                                                                            field_number=str(i).zfill(6))
+                    # Sanity - due to discretization err, sometimes (0.5 * np.pi - t.dec_rad) < 0. If this is the case, set to 0
+                    # theta = 0.5 * np.pi - t.dec_rad
+                    # if theta < 0:
+                    #     theta = 0.0
+                    n128_index = hp.ang2pix(static_grid_nside, 0.5 * np.pi - t.dec_rad, t.ra_rad)  # theta, phi
+                    t.mwe = ebv_dict[n128_index]
+                    # HACK: DC - this is overloaded... the `id` is for the Tile id, but the N128_Pixel_id is put here for convenience
+                    t.id = skypixel_dict[static_grid_nside][n128_index].id
+                    tiles.append(t)
+
+            t2 = time.time()
+            print("\n********* start DEBUG ***********")
+            print("`%s` tile creation - execution time: %s" % (detector_name, (t2 - t1)))
+            print("********* end DEBUG ***********\n")
+
+        print("Building INSERTS for all static tiles ...")
+        static_tile_data = []
+        for t in tiles:
+            static_tile_data.append((t.detector.id,
+                                     t.field_name,
+                                     t.ra_deg,
+                                     t.dec_deg,
+                                     "POINT(%s %s)" % (t.dec_deg, t.ra_deg - 180.0),
+                                     # Dec, RA order due to MySQL convention for lat/lon
+                                     t.query_polygon_string,
+                                     str(t.mwe),
+                                     t.id) # HACK: DC - this is overloaded... the `id` is for the Tile id, but the N128_Pixel_id is put here for convenience
+                                    )
+
+        print("INSERTing all static tiles ...")
+        batch_insert(insert_static_tile, static_tile_data)
+
     def main(self):
 
         configFile = './Settings.ini'
@@ -544,6 +629,22 @@ class Teglon:
                         q = insert_tm % (
                         tm_detect.name, tm_detect.query_polygon_string, tm_detect.area, inst_id)
                         query_db([q], commit=True)
+
+                    # HACK: DC - TM doesn't store declination limits natively, so I am inserting this here since it will
+                    # be used to construct a static grid for Charlie...
+                    update_T80_tm = '''
+                        WITH T80S_Cam AS (
+                            SELECT id FROM Detector WHERE TM_id = 80
+                        )
+                        UPDATE 
+                            Detector 
+                        SET
+                            MaxDec = 10.0,
+                            Deg_width = 1.4216,
+                            Deg_height = 1.4238
+                        WHERE id = (SELECT id FROM T80S_Cam);
+                    '''
+                    query_db([update_T80_tm], commit=True)
                 else:
                     print("Can't load TM detectors with API keys or API endpoints!!")
             print("...Done")
@@ -844,96 +945,118 @@ class Teglon:
         else:
             print("Building Static Grids...")
 
-            select_detect = '''
-                SELECT Name, ST_AsText(Poly), Deg_width, Deg_height, id FROM Detector WHERE Name='%s';
-            '''
-            insert_static_tile = '''INSERT INTO StaticTile (Detector_id, FieldName, RA, _Dec, Coord, Poly, EBV, N128_SkyPixel_id) 
-            VALUES (%s, %s, %s, %s, ST_PointFromText(%s, 4326), ST_GEOMFROMTEXT(%s, 4326), %s, %s)'''
-
-            # Only build out static grids for Swope and Thacher to begin with
-            t1 = time.time()
-            swope_result = query_db([select_detect % 'SWOPE'])[0][0]
-            swope_vertices = Detector.get_detector_vertices_from_teglon_db(swope_result[1])
-            swope_id = int(swope_result[4])
-            swope = Detector(detector_name="SWOPE", detector_vertex_list_collection=swope_vertices,
-                             detector_width_deg=swope_result[2], detector_height_deg=swope_result[2],
-                             detector_id=swope_id)
-            swope_coords = Cartographer.generate_all_sky_coords(swope)
-            t2 = time.time()
-            print("\n********* start DEBUG ***********")
-            print("Swope SkyCoord Creation - execution time: %s" % (t2 - t1))
-            print("********* end DEBUG ***********\n")
+            grids_to_build = [
+                "SWOPE",
+                "THACHER",
+                "T80S_T80S-Cam"
+            ]
 
             t1 = time.time()
-            thacher_result = query_db([select_detect % 'THACHER'])[0][0]
-            thacher_vertices = Detector.get_detector_vertices_from_teglon_db(swope_result[1])
-            thacher_id = int(thacher_result[4])
-            thacher = Detector(detector_name="THACHER", detector_vertex_list_collection=thacher_vertices,
-                             detector_width_deg=thacher_result[2], detector_height_deg=thacher_result[2],
-                             detector_id=thacher_id)
-            thacher_coords = Cartographer.generate_all_sky_coords(thacher)
+            self.generate_static_grid_inserts(detector_name_list=grids_to_build, ebv_dict=ebv, skypixel_dict=sky_pixels)
             t2 = time.time()
+
             print("\n********* start DEBUG ***********")
-            print("Thacher SkyCoord Creation - execution time: %s" % (t2 - t1))
+            print("Static Tile Creation - execution time: %s" % (t2 - t1))
             print("********* end DEBUG ***********\n")
 
-            swope_tiles = []
-            t1 = time.time()
-            for i, c in enumerate(swope_coords):
-                t = Tile(c[0], c[1], swope, nside128)
-                t.field_name = "S%s" % str(i).zfill(6)
-                n128_index = hp.ang2pix(nside128, 0.5*np.pi - t.dec_rad, t.ra_rad) # theta, phi
-                t.mwe = ebv[n128_index]
-                t.id = sky_pixels[nside128][n128_index].id
-                swope_tiles.append(t)
-
-            t2 = time.time()
-            print("\n********* start DEBUG ***********")
-            print("Swope Static Tile Creation - execution time: %s" % (t2 - t1))
-            print("********* end DEBUG ***********\n")
-
-            thacher_tiles = []
-            t1 = time.time()
-            for i, c in enumerate(thacher_coords):
-                t = Tile(c[0], c[1], thacher, nside128)
-                t.field_name = "T%s" % str(i).zfill(6)
-                n128_index = hp.ang2pix(nside128, 0.5*np.pi - t.dec_rad, t.ra_rad) # theta, phi
-                t.mwe = ebv[n128_index]
-                t.id = sky_pixels[nside128][n128_index].id
-                thacher_tiles.append(t)
-
-            t2 = time.time()
-            print("\n********* start DEBUG ***********")
-            print("Thacher Static Tile Creation - execution time: %s" % (t2 - t1))
-            print("********* end DEBUG ***********\n")
-
-            t1 = time.time()
-            static_tile_data = []
-            for t in swope_tiles:
-                static_tile_data.append((swope_id,
-                    t.field_name,
-                    t.ra_deg,
-                    t.dec_deg,
-                    "POINT(%s %s)" % (t.dec_deg, t.ra_deg - 180.0),  # Dec, RA order due to MySQL convention for lat/lon
-                    t.query_polygon_string,
-                    str(t.mwe),
-                    t.id))
-
-            for t in thacher_tiles:
-                static_tile_data.append((thacher_id,
-                    t.field_name,
-                    t.ra_deg,
-                    t.dec_deg,
-                    "POINT(%s %s)" % (t.dec_deg, t.ra_deg - 180.0),  # Dec, RA order due to MySQL convention for lat/lon
-                    t.query_polygon_string,
-                    str(t.mwe),
-                    t.id))
-            t2 = time.time()
-            print("\n********* start DEBUG ***********")
-            print("Building Static Tile Insert Data - execution time: %s" % (t2 - t1))
-            print("********* end DEBUG ***********\n")
-
-            batch_insert(insert_static_tile, static_tile_data)
+            # select_detect = '''
+            #     SELECT Name, ST_AsText(Poly), Deg_width, Deg_height, id, MinDec, MaxDec FROM Detector WHERE Name='%s';
+            # '''
+            # insert_static_tile = '''INSERT INTO StaticTile (Detector_id, FieldName, RA, _Dec, Coord, Poly, EBV, N128_SkyPixel_id)
+            # VALUES (%s, %s, %s, %s, ST_PointFromText(%s, 4326), ST_GEOMFROMTEXT(%s, 4326), %s, %s)'''
+            #
+            # # Only build out static grids for Swope and Thacher to begin with
+            # t1 = time.time()
+            # swope_result = query_db([select_detect % 'SWOPE'])[0][0]
+            # swope_vertices = Detector.get_detector_vertices_from_teglon_db(swope_result[1])
+            # swope_id = int(swope_result[4])
+            # swope_min_dec = float(swope_result[5])
+            # swope_max_dec = float(swope_result[6])
+            # swope = Detector(detector_name="SWOPE", detector_vertex_list_collection=swope_vertices,
+            #                  detector_width_deg=swope_result[2], detector_height_deg=swope_result[2],
+            #                  detector_id=swope_id)
+            # swope_coords = Cartographer.generate_all_sky_coords(swope)
+            # t2 = time.time()
+            # print("\n********* start DEBUG ***********")
+            # print("Swope SkyCoord Creation - execution time: %s" % (t2 - t1))
+            # print("********* end DEBUG ***********\n")
+            #
+            # t1 = time.time()
+            # thacher_result = query_db([select_detect % 'THACHER'])[0][0]
+            # thacher_vertices = Detector.get_detector_vertices_from_teglon_db(swope_result[1])
+            # thacher_id = int(thacher_result[4])
+            # thacher_min_dec = float(thacher_result[5])
+            # thacher_max_dec = float(thacher_result[6])
+            # thacher = Detector(detector_name="THACHER", detector_vertex_list_collection=thacher_vertices,
+            #                  detector_width_deg=thacher_result[2], detector_height_deg=thacher_result[2],
+            #                  detector_id=thacher_id)
+            # thacher_coords = Cartographer.generate_all_sky_coords(thacher)
+            # t2 = time.time()
+            # print("\n********* start DEBUG ***********")
+            # print("Thacher SkyCoord Creation - execution time: %s" % (t2 - t1))
+            # print("********* end DEBUG ***********\n")
+            #
+            # swope_tiles = []
+            # t1 = time.time()
+            # for i, c in enumerate(swope_coords):
+            #     ra_deg, dec_deg = c[0], c[1]
+            #     if dec_deg >= swope_min_dec and dec_deg <= swope_max_dec:
+            #         t = Tile(c[0], c[1], swope, nside128)
+            #         t.field_name = "S%s" % str(i).zfill(6)
+            #         n128_index = hp.ang2pix(nside128, 0.5*np.pi - t.dec_rad, t.ra_rad) # theta, phi
+            #         t.mwe = ebv[n128_index]
+            #         t.id = sky_pixels[nside128][n128_index].id
+            #         swope_tiles.append(t)
+            #
+            # t2 = time.time()
+            # print("\n********* start DEBUG ***********")
+            # print("Swope Static Tile Creation - execution time: %s" % (t2 - t1))
+            # print("********* end DEBUG ***********\n")
+            #
+            # thacher_tiles = []
+            # t1 = time.time()
+            # for i, c in enumerate(thacher_coords):
+            #     ra_deg, dec_deg = c[0], c[1]
+            #     if dec_deg >= thacher_min_dec and dec_deg <= thacher_max_dec:
+            #         t = Tile(c[0], c[1], thacher, nside128)
+            #         t.field_name = "T%s" % str(i).zfill(6)
+            #         n128_index = hp.ang2pix(nside128, 0.5*np.pi - t.dec_rad, t.ra_rad) # theta, phi
+            #         t.mwe = ebv[n128_index]
+            #         t.id = sky_pixels[nside128][n128_index].id
+            #         thacher_tiles.append(t)
+            #
+            # t2 = time.time()
+            # print("\n********* start DEBUG ***********")
+            # print("Thacher Static Tile Creation - execution time: %s" % (t2 - t1))
+            # print("********* end DEBUG ***********\n")
+            #
+            # t1 = time.time()
+            # static_tile_data = []
+            # for t in swope_tiles:
+            #     static_tile_data.append((swope_id,
+            #         t.field_name,
+            #         t.ra_deg,
+            #         t.dec_deg,
+            #         "POINT(%s %s)" % (t.dec_deg, t.ra_deg - 180.0),  # Dec, RA order due to MySQL convention for lat/lon
+            #         t.query_polygon_string,
+            #         str(t.mwe),
+            #         t.id))
+            #
+            # for t in thacher_tiles:
+            #     static_tile_data.append((thacher_id,
+            #         t.field_name,
+            #         t.ra_deg,
+            #         t.dec_deg,
+            #         "POINT(%s %s)" % (t.dec_deg, t.ra_deg - 180.0),  # Dec, RA order due to MySQL convention for lat/lon
+            #         t.query_polygon_string,
+            #         str(t.mwe),
+            #         t.id))
+            # t2 = time.time()
+            # print("\n********* start DEBUG ***********")
+            # print("Building Static Tile Insert Data - execution time: %s" % (t2 - t1))
+            # print("********* end DEBUG ***********\n")
+            #
+            # batch_insert(insert_static_tile, static_tile_data)
 
 if __name__ == "__main__":
     useagestring = """python InitializeTeglon.py [options]

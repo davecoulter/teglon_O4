@@ -59,6 +59,9 @@ class Teglon:
         parser.add_option('--skip_thacher', action="store_true", default=False,
                           help='''Do not register Thacher tiles for this map (Default = False)''')
 
+        parser.add_option('--skip_t80', action="store_true", default=False,
+                          help='''Do not register T80S_T80S-Cam tiles for this map (Default = False)''')
+
         return (parser)
 
     def main(self):
@@ -613,7 +616,7 @@ class Teglon:
                 for t in initialized_swope_tiles:
                     for p in t.enclosed_pixel_indices:
                         if p in map_pixel_dict:
-                            tile_pixel_data.append((t.id, map_pixel_dict[p][0]))
+                            tile_pixel_data.append((t.id, map_pixel_dict[p][0], healpix_map_id))
 
                 # Create CSV
                 try:
@@ -678,7 +681,7 @@ class Teglon:
                 for t in initialized_thacher_tiles:
                     for p in t.enclosed_pixel_indices:
                         if p in map_pixel_dict:
-                            tile_pixel_data.append((t.id, map_pixel_dict[p][0]))
+                            tile_pixel_data.append((t.id, map_pixel_dict[p][0], healpix_map_id))
 
                 # Append to existing CSV, upload, and clean up CSV
                 try:
@@ -699,37 +702,98 @@ class Teglon:
                     print("\nExiting")
                     return 1
 
-            print("Bulk uploading Tile-Pixel...")
-            t1 = time.time()
-            st_hp_upload_sql = """LOAD DATA LOCAL INFILE '%s' 
-                    INTO TABLE StaticTile_HealpixPixel 
-                    FIELDS TERMINATED BY ',' 
-                    LINES TERMINATED BY '\n' 
-                    (StaticTile_id, HealpixPixel_id);"""
+            tile_pixel_data = []
+            if not self.options.skip_t80:
+                ##### DO T80 ######
+                # Get detector -> static tile rows
+                t80_detector_result = query_db([select_detector % "T80S_T80S-Cam"])[0][0]
+                t80_id = t80_detector_result[0]
+                t80_name = t80_detector_result[1]
+                t80_poly = t80_detector_result[2]
+                t80_detector_vertices = Detector.get_detector_vertices_from_teglon_db(t80_poly)
+                t80_detector = Detector(t80_name, t80_detector_vertices, detector_id=t80_id)
+                t80_static_tile_rows = query_db([tile_select % t80_id])[0]
 
-            success = bulk_upload(st_hp_upload_sql % tile_pixel_upload_csv)
-            if not success:
-                print("\nUnsuccessful bulk upload. Exiting...")
-                return 1
-
-            t2 = time.time()
-            print("\n********* start DEBUG ***********")
-            print("Tile-Pixel CSV upload execution time: %s" % (t2 - t1))
-
-            try:
-                print("Removing `%s`..." % tile_pixel_upload_csv)
-                os.remove(tile_pixel_upload_csv)
+                t80_tiles = []
+                for r in t80_static_tile_rows:
+                    t = Tile(central_ra_deg=float(r[3]), central_dec_deg=float(r[4]), detector=t80_detector,
+                             nside=map_nside, tile_id=int(r[0]), tile_mwe=float(r[7]))
+                    t80_tiles.append(t)
 
                 # clean up
-                print("freeing `tile_pixel_data`...")
-                del tile_pixel_data
+                print("freeing `t80_static_tile_rows`...")
+                del t80_static_tile_rows
 
-                print("... Done")
-            except Error as e:
-                print("Error in file removal")
-                print(e)
-                print("\nExiting")
-                return 1
+                t1 = time.time()
+                initialized_t80_tiles = None
+                with mp.Pool() as pool:
+                    initialized_t80_tiles = pool.map(initialize_tile, t80_tiles)
+
+                # clean up
+                print("freeing `t80_tiles`...")
+                del t80_tiles
+                t2 = time.time()
+
+                print("\n********* start DEBUG ***********")
+                print("T80 Tile initialization execution time: %s" % (t2 - t1))
+                print("********* end DEBUG ***********\n")
+
+                # Insert Tile/Healpix pixel relations
+                for t in initialized_t80_tiles:
+                    for p in t.enclosed_pixel_indices:
+                        if p in map_pixel_dict:
+                            tile_pixel_data.append((t.id, map_pixel_dict[p][0], healpix_map_id))
+
+                # Append to existing CSV, upload, and clean up CSV
+                try:
+                    t1 = time.time()
+                    print("Appending `%s`" % tile_pixel_upload_csv)
+                    with open(tile_pixel_upload_csv, 'a') as csvfile:
+                        csvwriter = csv.writer(csvfile)
+                        for data in tile_pixel_data:
+                            csvwriter.writerow(data)
+
+                    t2 = time.time()
+                    print("\n********* start DEBUG ***********")
+                    print("Tile-Pixel CSV append execution time: %s" % (t2 - t1))
+                    print("********* end DEBUG ***********\n")
+                except Error as e:
+                    print("Error in creating Tile-Pixel CSV:\n")
+                    print(e)
+                    print("\nExiting")
+                    return 1
+
+        print("Bulk uploading Tile-Pixel...")
+        t1 = time.time()
+        st_hp_upload_sql = """LOAD DATA LOCAL INFILE '%s' 
+                            INTO TABLE StaticTile_HealpixPixel 
+                            FIELDS TERMINATED BY ',' 
+                            LINES TERMINATED BY '\n' 
+                            (StaticTile_id, HealpixPixel_id, HealpixMap_id);"""
+
+        success = bulk_upload(st_hp_upload_sql % tile_pixel_upload_csv)
+        if not success:
+            print("\nUnsuccessful bulk upload. Exiting...")
+            return 1
+
+        t2 = time.time()
+        print("\n********* start DEBUG ***********")
+        print("Tile-Pixel CSV upload execution time: %s" % (t2 - t1))
+
+        try:
+            print("Removing `%s`..." % tile_pixel_upload_csv)
+            os.remove(tile_pixel_upload_csv)
+
+            # clean up
+            print("freeing `tile_pixel_data`...")
+            del tile_pixel_data
+
+            print("... Done")
+        except Error as e:
+            print("Error in file removal")
+            print(e)
+            print("\nExiting")
+            return 1
 
         if not build_galaxy_pixel_relation:
             print("Skipping galaxy-pixel relation...")
@@ -1330,7 +1394,7 @@ class Teglon:
 
                 galaxy_attribute_data.append(
                     # (g[0], g[1], g[2], g[3], g[4], norm_4d_weight, norm_4d_weight * net_prob_to_galaxies))
-                    (g_id, hp_id, lum_prob, z_prob, two_d_prob, norm_4d_weight, net_gal_prob))
+                    (g_id, hp_id, lum_prob, z_prob, two_d_prob, norm_4d_weight, net_gal_prob, healpix_map_id))
 
             # clean up
             print("freeing `galaxy_attributes`...")
@@ -1362,7 +1426,7 @@ class Teglon:
                     INTO TABLE HealpixPixel_Galaxy_Weight 
                     FIELDS TERMINATED BY ',' 
                     LINES TERMINATED BY '\n' 
-                    (Galaxy_id, HealpixPixel_id, LumWeight, zWeight, Prob2DWeight, Norm4DWeight, GalaxyProb);"""
+                    (Galaxy_id, HealpixPixel_id, LumWeight, zWeight, Prob2DWeight, Norm4DWeight, GalaxyProb, HealpixMap_id);"""
 
             success = bulk_upload(upload_sql % galaxy_attributes_upload_csv)
             if not success:

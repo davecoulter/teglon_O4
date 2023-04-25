@@ -250,7 +250,8 @@ class Teglon:
 
 
         # Pointings
-        telescope_name = "SWOPE"
+        # telescope_name = "SWOPE"
+        telescope_name = "T80S_T80S-Cam"
         detector_select_by_name = "SELECT id, Name, Deg_width, Deg_height, Deg_radius, Area, MinDec, MaxDec, ST_AsText(Poly) FROM Detector WHERE Name='%s'"
         detector_result = query_db([detector_select_by_name % telescope_name])[0][0]
         detector_id = int(detector_result[0])
@@ -281,7 +282,7 @@ class Teglon:
                 tiles_to_plot.append(t)
 
         from matplotlib import colors
-        tile_probs = [t.net_prob for t in tiles_to_plot[0:1000]]
+        tile_probs = [t.net_prob for t in tiles_to_plot[0:200]]
         min_prob = np.min(tile_probs)
         max_prob = np.max(tile_probs)
         print("min prob: %s" % min_prob)
@@ -290,7 +291,7 @@ class Teglon:
         clr_norm = colors.LogNorm(min_prob, max_prob)
 
         # This is an arbitrary # to plot... but they're sorted by highest prob first, and we'll never get 1000 pointings
-        for i, t in enumerate(tiles_to_plot[0:1000]):
+        for i, t in enumerate(tiles_to_plot[0:200]):
             # HACK - protecting against plotting errs
             if t.ra_deg < 358 and t.ra_deg > 2:
                 t.plot2(ax_h, edgecolor='k',
