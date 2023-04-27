@@ -391,7 +391,9 @@ class Teglon:
 
 
 
-        fig.savefig("./web/events/S190425z/test_fig.svg", bbox_inches='tight', format="svg")  # ,dpi=840
+        # fig.savefig("./web/events/S190425z/test_fig.svg", bbox_inches='tight', format="svg")  # ,dpi=840
+        output_path = "%s/%s" % (formatted_healpix_dir, self.options.tile_file.replace(".csv", ".svg"))
+        fig.savefig(output_path, bbox_inches='tight', format="svg")  # ,dpi=840
         plt.close('all')
         print("... Done.")
 
