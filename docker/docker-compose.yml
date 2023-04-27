@@ -51,6 +51,11 @@ services:
             - ${VOL_DB_LOG}:/var/log/mysql
         environment:
             MYSQL_ROOT_PASSWORD: ${DB_PWD}
+        deploy:
+          resources:
+            limits:
+              cpus: ${CPU_NUM}
+              memory: ${MEM_LIMIT}
         healthcheck:
           test: [ "CMD", "mysqladmin" ,"ping", "-h", "localhost" ]
           timeout: 20s
@@ -62,7 +67,11 @@ services:
       image: "davecoulter/teglon:0.0.1"
       volumes:
         - ${VOL_APP}:/app
-        - ${VOL_CDBS}:/cdbs
+      deploy:
+        resources:
+          limits:
+            cpus: ${CPU_NUM}
+            memory: ${MEM_LIMIT}
       links:
         - gw_db
       environment:
@@ -77,6 +86,11 @@ services:
       image: "davecoulter/teglon:0.0.1"
       volumes:
         - ${VOL_APP}:/app
+      deploy:
+        resources:
+          limits:
+            cpus: ${CPU_NUM}
+            memory: ${MEM_LIMIT}
       environment:
         PYTHONPATH: /app
     nginx_prod:
