@@ -1,27 +1,17 @@
 import os
 import multiprocessing as mp
 from scipy.special import erf
-# import healpy as hp
+import healpy as hp
 from ligo.skymap import distance
 
-# OLD 2023-04-04
-# from src.objects.Detector import *
-# from src.objects.Tile import *
-# from src.objects.Pixel_Element import *
-# from src.utilities.Database_Helpers import *
-
-# NEW 2023-04-04
 from web.src.objects.Detector import *
 from web.src.objects.Tile import *
 from web.src.objects.Pixel_Element import *
 from web.src.utilities.Database_Helpers import *
 
 import psutil
-import shutil
 import urllib.request
-import requests
-from bs4 import BeautifulSoup
-from dateutil.parser import parse
+from astropy.time import Time
 
 from ligo.gracedb.rest import GraceDb
 
@@ -45,13 +35,17 @@ class Teglon:
         parser.add_option('--healpix_dir', default='./web/events/{GWID}', type="str",
                           help='Directory for where to look for the healpix file (Default = ../Events/{GWID})')
 
-        parser.add_option('--healpix_file', default="", type="str", help='healpix filename')
+        parser.add_option('--healpix_file', default="bayestar.fits.gz", type="str", help='healpix filename')
 
-        parser.add_option('--orig_res', action="store_true", default=False,
-                          help='''Upload the healpix file at the native resolution (Default = False)''')
+        parser.add_option('--analysis_mode', action="store_true", default=False,
+                          help='''Upload the healpix file at the native resolution (Default = False), with all 
+                            pixels. Otherwise, upload a rescaled version, and only the 90th percentile pixels.''')
 
-        parser.add_option('--load_local_file', action="store_true", default=False,
-                          help='''Circumvent downloading map and load map from disk (Default = False)''')
+        parser.add_option('--clobber', action="store_true", default=False,
+                          help='''Replace the existing (superevent, healpix_file) combination if it already exists. 
+                          If `clobber` not specified and combination exists, return error message.''')
+        # parser.add_option('--load_local_file', action="store_true", default=False,
+        #                   help='''Circumvent downloading map and load map from disk (Default = False)''')
 
         parser.add_option('--skip_swope', action="store_true", default=False,
                           help='''Do not register Swope tiles for this map (Default = False)''')
@@ -66,10 +60,9 @@ class Teglon:
 
     def main(self):
 
+        api_endpoint = "https://gracedb.ligo.org/api/"
         utilities_base_dir = "./web/src/utilities"
         pickle_output_dir = "%s/pickles/" % utilities_base_dir
-
-        gdb_client = GraceDb("https://gracedb.ligo.org/api/")
 
         isDEBUG = False
         build_map = True
@@ -140,9 +133,10 @@ class Teglon:
         N128_dict = None
         map_pixel_dict = None
 
+        # Can I remove this?
         if not build_map:
             print("Skipping build map...")
-            print("\tLoading existing map...")
+            print("\tLoading existing map from disk...")
             orig_prob, orig_distmu, orig_distsigma, orig_distnorm, header_gen = hp.read_map(hpx_path, field=(0, 1, 2, 3), h=True)
 
             orig_npix = len(orig_prob)
@@ -151,7 +145,7 @@ class Teglon:
             orig_map_nside = hp.npix2nside(orig_npix)
 
             # Check if NSIDE is > 256. If it is, and the --orig_res flag is not specified, rescale map to NSIDE 256
-            if orig_map_nside > nside256 and not self.options.orig_res:
+            if orig_map_nside > nside256 and not self.options.analysis_mode:
                 print("Rescaling map to NSIDE = 256")
                 rescaled_prob, rescaled_distmu, rescaled_distsigma, rescaled_distnorm = hp.ud_grade([orig_prob,
                                                                                                     orig_distmu,
@@ -191,85 +185,80 @@ class Teglon:
         else:
             print("Building map...")
             # Create target directory if it doesn't already exist...
-            try:
+            if not os.path.exists(formatted_healpix_dir):
                 os.mkdir(formatted_healpix_dir)
                 print("\n\nDirectory ", formatted_healpix_dir, " Created ")
-
-                # Create the `ObservedTiles` and `Candidates` subdirectories
-                os.mkdir(formatted_candidates_dir)
-                os.mkdir(formatted_obs_tiles_dir)
-                os.mkdir(formatted_model_dir)
-            except FileExistsError:
+            else:
                 print("\n\nDirectory ", formatted_healpix_dir, " already exists")
 
-            if not self.options.load_local_file:
-                # Get file -- ADD check and only get if you need to...
-                try:
-                    print("Downloading `%s`..." % self.options.healpix_file)
-                    t1 = time.time()
-                    gw_file_formatter = "https://gracedb.ligo.org/apiweb/superevents/%s/files/%s"
-                    gw_file = gw_file_formatter % (self.options.gw_id, self.options.healpix_file)
+            if not os.path.exists(formatted_candidates_dir):
+                os.mkdir(formatted_candidates_dir)
+                print("\n\nDirectory ", formatted_candidates_dir, " Created ")
+            else:
+                print("\n\nDirectory ", formatted_candidates_dir, " already exists")
 
-                    with urllib.request.urlopen(gw_file) as response:
-                        with open(hpx_path, 'wb') as out_file:
-                            shutil.copyfileobj(response, out_file)
-                    t2 = time.time()
+            if not os.path.exists(formatted_obs_tiles_dir):
+                os.mkdir(formatted_obs_tiles_dir)
+                print("\n\nDirectory ", formatted_obs_tiles_dir, " Created ")
+            else:
+                print("\n\nDirectory ", formatted_obs_tiles_dir, " already exists")
 
-                    print("\n********* start DEBUG ***********")
-                    print("Downloading `%s` - execution time: %s" % (self.options.healpix_file, (t2 - t1)))
-                    print("********* end DEBUG ***********\n")
+            if not os.path.exists(formatted_model_dir):
+                os.mkdir(formatted_model_dir)
+                print("\n\nDirectory ", formatted_model_dir, " Created ")
+            else:
+                print("\n\nDirectory ", formatted_model_dir, " already exists")
 
-                except urllib.error.HTTPError as e:
-                    print("\nError:")
-                    print(e.code, gw_file)
-                    print("\n\tExiting...")
-                    return 1
-                except urllib.error.URLError as e:
-                    print("\nError:")
-                    if hasattr(e, 'reason'):
-                        print(e.reason, gw_file)
-                    elif hasattr(e, 'code'):
-                        print(e.code, gw_file)
-                    print("\n\tExiting...")
-                    return 1
-                except Error as e:
-                    print("\nError:")
-                    print(e)
-                    print("\n\tExiting...")
-                    return 1
+            # try:
+            #     os.mkdir(formatted_healpix_dir)
+            #     print("\n\nDirectory ", formatted_healpix_dir, " Created ")
+            #
+            #     # Create the `ObservedTiles` and `Candidates` subdirectories
+            #     os.mkdir(formatted_candidates_dir)
+            #     os.mkdir(formatted_obs_tiles_dir)
+            #     os.mkdir(formatted_model_dir)
+            # except FileExistsError:
+            #     print("\n\nDirectory ", formatted_healpix_dir, " already exists")
 
-            # Get event details from GraceDB page
+            # if not self.options.load_local_file:
+            # Get file -- ADD check and only get if you need to...
+
+            t_0 = ""
+            t_0_datetime_str = ""
+            gw_url = ""
+
             try:
-                print("Scraping `%s` details..." % self.options.gw_id)
                 t1 = time.time()
-                gw_url_formatter = "https://gracedb.ligo.org/superevents/%s/view/"
-                gw_url = gw_url_formatter % self.options.gw_id
 
-                r = requests.get(gw_url)
-                data = r.text
-                soup = BeautifulSoup(data, "lxml")
+                gdb_client = GraceDb(api_endpoint)
+                event_json = gdb_client.superevent(self.options.gw_id).json()
+                far = event_json["far"]
+                t_0 = event_json["t_0"]
+                t_0_time_obj = Time(t_0, scale="utc", format="gps")
+                t_0_datetime_str = t_0_time_obj.to_value(format="iso")
+                gw_url = event_json["links"]["self"]
 
-                ## Current HTML is different. HACK: adding hard coded values so that this just works
-                # tds = soup.find("table", {"class": "superevent"}).find_all('tr')[1].find_all('td')
-                # FAR_hz = tds[3].text
-                # FAR_per_yr = tds[4].text
-                # t_start = tds[5].text
-                # t_0 = tds[6].text
-                # t_end = tds[7].text
-                # UTC_submission_time = parse(tds[8].text)
+                # Download and save map file.
+                # The default self.options.healpix_file - "bayestar.fits.gz" always has the most up-to-date flat file
+                #   in a search context
+                file_response = gdb_client.files(self.options.gw_id, self.options.healpix_file)
+                with open(hpx_path, "wb") as f:
+                    f.write(file_response.data)
 
-                # 0814 values
-                # t_0 = 1249852257.012957
-                # UTC_submission_time = parse("2019-08-14 21:11:18")
-
-                # 0425 values
-                t_0 = 1240215503.01
-                UTC_submission_time = parse("2019-04-25 08:18:26")
+                # print("Downloading `%s`..." % self.options.healpix_file)
+                # t1 = time.time()
+                # gw_file_formatter = "https://gracedb.ligo.org/apiweb/superevents/%s/files/%s"
+                # gw_file = gw_file_formatter % (self.options.gw_id, self.options.healpix_file)
+                #
+                # with urllib.request.urlopen(gw_file) as response:
+                #     with open(hpx_path, 'wb') as out_file:
+                #         shutil.copyfileobj(response, out_file)
 
 
                 t2 = time.time()
+
                 print("\n********* start DEBUG ***********")
-                print("Scraping `%s` details - execution time: %s" % (self.options.gw_id, (t2 - t1)))
+                print("Downloading `%s` - execution time: %s" % (self.options.healpix_file, (t2 - t1)))
                 print("********* end DEBUG ***********\n")
 
             except urllib.error.HTTPError as e:
@@ -291,6 +280,59 @@ class Teglon:
                 print("\n\tExiting...")
                 return 1
 
+            # Get event details from GraceDB page
+            # try:
+            #     print("Scraping `%s` details..." % self.options.gw_id)
+            #     t1 = time.time()
+            #     gw_url_formatter = "https://gracedb.ligo.org/superevents/%s/view/"
+            #     gw_url = gw_url_formatter % self.options.gw_id
+            #
+            #     r = requests.get(gw_url)
+            #     data = r.text
+            #     soup = BeautifulSoup(data, "lxml")
+            #
+            #     ## Current HTML is different. HACK: adding hard coded values so that this just works
+            #     # tds = soup.find("table", {"class": "superevent"}).find_all('tr')[1].find_all('td')
+            #     # FAR_hz = tds[3].text
+            #     # FAR_per_yr = tds[4].text
+            #     # t_start = tds[5].text
+            #     # t_0 = tds[6].text
+            #     # t_end = tds[7].text
+            #     # UTC_submission_time = parse(tds[8].text)
+            #
+            #     # 0814 values
+            #     # t_0 = 1249852257.012957
+            #     # UTC_submission_time = parse("2019-08-14 21:11:18")
+            #
+            #     # 0425 values
+            #     t_0 = 1240215503.01
+            #     UTC_submission_time = parse("2019-04-25 08:18:26")
+            #
+            #
+            #     t2 = time.time()
+            #     print("\n********* start DEBUG ***********")
+            #     print("Scraping `%s` details - execution time: %s" % (self.options.gw_id, (t2 - t1)))
+            #     print("********* end DEBUG ***********\n")
+            #
+            # except urllib.error.HTTPError as e:
+            #     print("\nError:")
+            #     print(e.code, self.options.healpix_file)
+            #     print("\n\tExiting...")
+            #     return 1
+            # except urllib.error.URLError as e:
+            #     print("\nError:")
+            #     if hasattr(e, 'reason'):
+            #         print(e.reason, self.options.healpix_file)
+            #     elif hasattr(e, 'code'):
+            #         print(e.code, self.options.healpix_file)
+            #     print("\n\tExiting...")
+            #     return 1
+            # except Error as e:
+            #     print("\nError:")
+            #     print(e)
+            #     print("\n\tExiting...")
+            #     return 1
+
             # Unpack healpix file and insert map into db
             print("Unpacking '%s':%s..." % (self.options.gw_id, self.options.healpix_file))
             t1 = time.time()
@@ -310,7 +352,7 @@ class Teglon:
 
 
             # Check if NSIDE is > 256. If it is, and the --orig_res flag is not specified, rescale map to NSIDE 256
-            if orig_map_nside > nside256 and not self.options.orig_res:
+            if orig_map_nside > nside256 and not self.options.analysis_mode:
                 print("Rescaling map to NSIDE = 256")
                 rescaled_prob, rescaled_distmu, rescaled_distsigma, rescaled_distnorm = hp.ud_grade([orig_prob,
                                                                                                     orig_distmu,
@@ -353,8 +395,10 @@ class Teglon:
             (GWID, URL, Filename, NSIDE, t_0, SubmissionTime, NetProbToGalaxies, RescaledNSIDE) 
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s);'''
 
+            # healpix_map_data = [(self.options.gw_id, gw_url, self.options.healpix_file, orig_map_nside, t_0,
+            #                      UTC_submission_time.strftime('%Y-%m-%d %H:%M:%S'), 0.0, map_nside)]
             healpix_map_data = [(self.options.gw_id, gw_url, self.options.healpix_file, orig_map_nside, t_0,
-                                 UTC_submission_time.strftime('%Y-%m-%d %H:%M:%S'), 0.0, map_nside)]
+                                 t_0_datetime_str, 0.0, map_nside)]
 
             print("\nInserting %s Healpix Map: %s ..." % (self.options.gw_id, self.options.healpix_file))
             insert_records(healpix_map_insert, healpix_map_data)
