@@ -138,22 +138,22 @@ class Teglon:
         parser.add_option('--healpix_dir', default='./web/events/{GWID}', type="str",
                           help='Directory for where to look for the healpix file.')
 
-        parser.add_option('--healpix_file', default="", type="str", help='Healpix filename.')
+        parser.add_option('--healpix_file', default="bayestar.fits.gz", type="str", help='Healpix filename.')
 
         parser.add_option('--tele', default="s", type="str",
                           help='''Telescope abbreviation for the telescope to extract files for. Default: `s`. 
-                          Available: (s:Swope, t:Thacher)
+                          Available: (s:Swope, t:Thacher, n:Nickel, t80: T80S_T80S-Cam)
                           ''')
 
         parser.add_option('--band', default="r", type="str",
-                          help='Telescope abbreviation for the telescope to extract files for. Default: `r`. Available: (g, r, i)')
+                          help='Telescope abbreviation for the telescope to extract files for. Default: `r`. Available: (g, r, i, z)')
 
         parser.add_option('--extinct', default="0.5", type="float",
                           help='Extinction in mags in the specified band to be less than. Default: 0.5 mag. Must be > 0.0')
 
         parser.add_option('--tile_file', default="{FILENAME}", type="str", help='Filename of tiles to plot.')
 
-        parser.add_option('--galaxies_file', default="{FILENAME}", type="str", help='Optional: Filename of galaxies to plot.')
+        # parser.add_option('--galaxies_file', default="{FILENAME}", type="str", help='Optional: Filename of galaxies to plot.')
 
         parser.add_option('--get_tiles_from_db', action="store_true", default=False,
                           help='''Ignore tile file and get all observed tiles for map from database''')
@@ -172,6 +172,51 @@ class Teglon:
         return (parser)
 
     def main(self):
+
+        is_error = False
+
+        detector_mapping = {
+            "s": "SWOPE",
+            "t": "THACHER",
+            "n": "NICKEL",
+            "t80": "T80S_T80S-Cam"
+        }
+
+        band_mapping = {
+            "g": "SDSS g",
+            "r": "SDSS r",
+            "i": "SDSS i",
+            "z": "SDSS z"
+        }
+
+        # Valid prob types
+        _4D = "4D"
+        _2D = "2D"
+
+        # Parameter checks
+        if self.options.gw_id == "":
+            is_error = True
+            print("GWID is required.")
+
+        formatted_healpix_dir = self.options.healpix_dir
+        formatted_healpix_dir = formatted_healpix_dir.replace("{GWID}", self.options.gw_id)
+        tile_file_path = "%s/%s" % (formatted_healpix_dir, self.options.tile_file)
+
+        if self.options.band not in band_mapping:
+            is_error = True
+            print("Invalid band selection. Available bands: %s" % band_mapping.keys())
+
+        if not self.options.get_tiles_from_db:
+            if not os.path.exists(tile_file_path):
+                is_error = True
+                print("You must specify which tile file to plot.")
+
+        if self.options.tele not in detector_mapping:
+            is_error = True
+            print("Invalid telescope selection. Available telescopes: %s" % detector_mapping.keys())
+
+
+
 
         fig = plt.figure()
         ax_h = plt.axes(projection='astro hours mollweide')
@@ -260,9 +305,7 @@ class Teglon:
         detector_vertices = Detector.get_detector_vertices_from_teglon_db(detector_poly)
         detector = Detector(detector_name, detector_vertices, detector_id=detector_id)
         #
-        formatted_healpix_dir = self.options.healpix_dir
-        formatted_healpix_dir = formatted_healpix_dir.replace("{GWID}", self.options.gw_id)
-        tile_file_path = "%s/%s" % (formatted_healpix_dir, self.options.tile_file)
+
         tiles_to_plot = []
 
 

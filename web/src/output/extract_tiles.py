@@ -18,7 +18,7 @@ class Teglon:
         parser.add_option('--healpix_dir', default='./web/events/{GWID}', type="str",
                           help='Directory for where to look for the healpix file.')
 
-        parser.add_option('--healpix_file', default="", type="str", help='healpix filename.')
+        parser.add_option('--healpix_file', default="bayestar.fits.gz", type="str", help='healpix filename.')
 
         parser.add_option('--s_band', default="r", type="str",
                           help='Filter for Swope tile extract to use for extinction calculation. Default: `r`. Available: (g, r, i)')
