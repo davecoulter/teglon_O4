@@ -296,7 +296,8 @@ class Teglon:
 
         # Pointings
         # telescope_name = "SWOPE"
-        telescope_name = "T80S_T80S-Cam"
+        # telescope_name = "T80S_T80S-Cam"
+        telescope_name = "THACHER"
         detector_select_by_name = "SELECT id, Name, Deg_width, Deg_height, Deg_radius, Area, MinDec, MaxDec, ST_AsText(Poly) FROM Detector WHERE Name='%s'"
         detector_result = query_db([detector_select_by_name % telescope_name])[0][0]
         detector_id = int(detector_result[0])
@@ -347,7 +348,7 @@ class Teglon:
         from astropy.coordinates import AltAz, EarthLocation
 
         time_of_trigger = Time(healpix_map_event_time.to_datetime(), scale="utc")
-        observatory = Observer.at_site("LCO")
+        observatory = Observer.at_site("Lick")
         sun_set = observatory.sun_set_time(time_of_trigger, which='nearest', horizon=-18 * u.deg)
         sun_rise = observatory.sun_rise_time(sun_set, which='next', horizon=-18 * u.deg)
         sun_coord = get_sun(sun_set)
