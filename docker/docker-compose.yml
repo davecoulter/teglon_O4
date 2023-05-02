@@ -14,7 +14,7 @@ services:
             - gw_db
         environment:
           FLASK_APP: web/project/__init__.py
-          FLASK_DEBUG: 1
+          PYTHONPATH: /app
         depends_on:
           gw_db:
             condition: service_healthy
@@ -33,6 +33,7 @@ services:
       environment:
         FLASK_APP: web/project/__init__.py
         FLASK_DEBUG: 1
+        PYTHONPATH: /app
       depends_on:
         gw_db:
           condition: service_healthy
