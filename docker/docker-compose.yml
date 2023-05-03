@@ -1,10 +1,12 @@
-version: '3.8'
+version: '2.4'
 services:
     gw_api_prod:
         container_name: teglon_api_prod
         platform: linux/amd64
         build: .
         image: "davecoulter/teglon:0.0.1"
+        mem_limit: 16gb
+        cpus: 0.75
         command: gunicorn --bind 0.0.0.0:5000 web.manage:app --timeout 1200
         volumes:
             - ${VOL_APP}:/app
@@ -23,6 +25,8 @@ services:
       platform: linux/amd64
       build: .
       image: "davecoulter/teglon:0.0.1"
+      mem_limit: 16gb
+      cpus: 0.75
       command: python /app/web/manage.py run -h 0.0.0.0
       volumes:
         - ${VOL_APP}:/app
@@ -40,6 +44,8 @@ services:
     gw_db:
         container_name: teglon_db
         image: "mysql:8.0.25"
+        mem_limit: 16gb
+        cpus: 0.75
         ports:
             - ${LOCAL_DB_PORT}:3306
         volumes:
@@ -48,15 +54,11 @@ services:
             - ./db_init/init.sql:/docker-entrypoint-initdb.d/1.sql
             - ./db_init/teglon_O4.sql:/docker-entrypoint-initdb.d/2.sql
             - ./db_init/angsep.sql:/docker-entrypoint-initdb.d/3.sql
-            - ./db_init/teglon_users.sql:/docker-entrypoint-initdb.d/4.sql
-            - ${VOL_DB_LOG}:/var/log/mysql
+            - ./db_init/backup_tables.sql:/docker-entrypoint-initdb.d/4.sql
+            - ./db_init/delete_map.sql:/docker-entrypoint-initdb.d/5.sql
+            - ./db_init/teglon_users.sql:/docker-entrypoint-initdb.d/6.sql
         environment:
             MYSQL_ROOT_PASSWORD: ${DB_PWD}
-#        deploy:
-#          resources:
-#            limits:
-#              cpus: ${CPU_NUM}
-#              memory: ${MEM_LIMIT}
         healthcheck:
           test: [ "CMD", "mysqladmin" ,"ping", "-h", "localhost" ]
           timeout: 20s
@@ -66,13 +68,10 @@ services:
       platform: linux/amd64
       build: .
       image: "davecoulter/teglon:0.0.1"
+      mem_limit: 16gb
+      cpus: 0.75
       volumes:
         - ${VOL_APP}:/app
-#      deploy:
-#        resources:
-#          limits:
-#            cpus: ${CPU_NUM}
-#            memory: ${MEM_LIMIT}
       links:
         - gw_db
       environment:
@@ -85,13 +84,10 @@ services:
       platform: linux/amd64
       build: .
       image: "davecoulter/teglon:0.0.1"
+      mem_limit: 16gb
+      cpus: 0.75
       volumes:
         - ${VOL_APP}:/app
-#      deploy:
-#        resources:
-#          limits:
-#            cpus: ${CPU_NUM}
-#            memory: ${MEM_LIMIT}
       environment:
         PYTHONPATH: /app
     nginx_prod:
