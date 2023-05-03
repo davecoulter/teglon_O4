@@ -61,8 +61,6 @@ class Teglon:
         parser.add_option('--num_tiles', default="-1", type="int",
                           help='''Number of tiles to plot for each tile file. If < 0, plot all. Otherwise, plot indices
                           [0:num_tiles].''')
-        # parser.add_option('--prob_type', default="2D", type="str",
-        #                   help='''Probability contour to plot. Default `2D`. Available: (4D, 2D)''')
 
         parser.add_option('--cum_prob_outer', default="0.9", type="float",
                           help='''Cumulative prob to cover in tiles. Default 0.9. Must be > 0.2 and < 0.95 
@@ -92,7 +90,6 @@ class Teglon:
             "a": "All"
         }
 
-        # lat (deg), lon (deg), elevation (meters)
         detector_geography = {
             "SWOPE": EarthLocation(lat=-29.0182 * u.deg, lon=-70.6926 * u.deg, height=2402 * u.m),
             "THACHER": EarthLocation(lat=34.46479 * u.deg, lon=-121.6431 * u.deg, height=630.0 * u.m),
@@ -150,7 +147,6 @@ class Teglon:
 
 
         # Create canvas
-        # fig = plt.figure()
         plot_axes = {}
         ax_list = []
         if plot_all:
@@ -161,8 +157,6 @@ class Teglon:
             ax_list += [ax1, ax2, ax3, ax4, ax5]
 
             for i, (detector_name, tile_file) in enumerate(tile_files.items()):
-                 # ax = fig.add_subplot(i+1, subplot_kw={'projection': 'astro hours mollweide'})
-                 # ax.grid()
                  _ax = ax_list[i]
                  _ax.grid()
                  _ax.tick_params(axis='both', labelsize=5)
@@ -175,10 +169,6 @@ class Teglon:
             ax.grid()
             plot_axes[detector_mapping[self.options.tele]] = ax
 
-
-
-        # ax_h = plt.axes(projection='astro hours mollweide')
-        # ax_h.grid()
 
         # Generate all plottable assets
         healpix_map_select = "SELECT id, RescaledNSIDE, t_0 FROM HealpixMap WHERE GWID = '%s' and Filename = '%s'"
@@ -229,8 +219,6 @@ class Teglon:
         for detector_name, plot_ax in plot_axes.items():
             plot_ax.title.set_text(detector_name)
             plot_ax.contourf_hpx(_90_50_levels_2d, cmap='OrRd', levels=[0.0, 0.5, 0.9], linewidths=0.2, alpha=0.3)
-            # plot_ax.contourf_hpx(_90_50_levels_4d, cmap='OrRd_r', levels=[0.0, 0.5, 0.9], linewidths=0.2, alpha=0.75)
-            # plot_ax.imshow_hpx(np.asarray(map_4d_pix), cmap='OrRd', norm=colors.LogNorm(vmin=0.00, vmax=0.004660431391080373))
 
         # if plotting All telescopes
         if plot_all:
@@ -238,18 +226,6 @@ class Teglon:
             ax_list[-1].contourf_hpx(_90_50_levels_4d, cmap='OrRd_r', levels=[0.0, 0.5, 0.9], linewidths=0.2, alpha=0.75)
 
         # Dust
-        # select_mwe_pix = '''
-        #     SELECT
-        #         sp.Pixel_Index,
-        #         sp_ebv.EBV*(SELECT b.F99_Coefficient FROM Band b WHERE `Name`='SDSS r')
-        #     FROM
-        #         SkyPixel sp
-        #     JOIN SkyPixel_EBV sp_ebv on sp_ebv.N128_SkyPixel_id = sp.id
-        #     # WHERE
-        #     #     sp_ebv.EBV*(SELECT b.F99_Coefficient FROM Band b WHERE `Name`='SDSS r') > 0.5
-        #     ORDER BY
-        #         sp.Pixel_Index;
-        # '''
         print("\tLoading existing mwe...")
         ebv = None
         if os.path.exists(pickle_output_dir + "ebv.pkl"):
@@ -267,25 +243,16 @@ class Teglon:
             with open(pickle_output_dir + 'ebv.pkl', 'wb') as handle:
                 pickle.dump(ebv, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-        # mwe_hpx_arr = []
-        # for ebv_pix in ebv:
-        #     mwe_hpx_arr
-        # mwe_pix_result = query_db([select_mwe_pix])[0]
-        # mwe_hpx_arr = []
-        # for mp in mwe_pix_result:
-        #     mwe_hpx_arr.append(float(mp[1]))
-
-
-
-        # ax_h.contour_hpx(np.asarray(mwe_hpx_arr), colors='dodgerblue', levels=[0.5, np.max(mwe_hpx_arr)],
-        #                  linewidths=0.2, alpha=0.5)
-        # ax_h.contourf_hpx(np.asarray(mwe_hpx_arr), cmap='Blues', levels=[0.5, np.max(mwe_hpx_arr)], linewidths=0.2,
-        #                   alpha=0.3)
-
         for detector_name, plot_ax in plot_axes.items():
             plot_ax.contour_hpx(ebv, colors='dodgerblue', levels=[0.5, np.max(ebv)], linewidths=0.2, alpha=0.5)
             plot_ax.contourf_hpx(ebv, cmap='Blues', levels=[0.5, np.max(ebv)], linewidths=0.2, alpha=0.3)
 
+        # Sun
+        time_of_trigger = Time(healpix_map_event_time.to_datetime(), scale="utc")
+        theta, phi = hp.pix2ang(nside=64, ipix=np.arange(hp.nside2npix(64)))
+        ra = np.rad2deg(phi)
+        dec = np.rad2deg(0.5 * np.pi - theta)
+        all_sky_coords = coord.SkyCoord(ra=ra, dec=dec, unit=(u.deg, u.deg))
 
         # Pointings
         detector_select_by_name = '''
@@ -340,120 +307,35 @@ class Teglon:
                     if t.ra_deg < 358 and t.ra_deg > 2:
                         t.plot2(plot_ax, edgecolor='k',
                                 facecolor=plt.cm.Greens(clr_norm(t.net_prob)),
-                                # facecolor="None",
                                 linewidth=0.05, alpha=1.0, zorder=9999)  #
 
-        # telescope_name = "SWOPE"
-        # telescope_name = "T80S_T80S-Cam"
-        # telescope_name = "THACHER"
+            # Sun Contours
+            observatory = Observer(location=detector_geography[detector_name])
+            sun_set = observatory.sun_set_time(time_of_trigger, which='nearest', horizon=-18 * u.deg)
+            sun_rise = observatory.sun_rise_time(sun_set, which='next', horizon=-18 * u.deg)
+            sun_coord = get_sun(sun_set)
+            hours_of_the_night = int((sun_rise - sun_set).to_value('hr'))
+            time_next = sun_set
 
-        # detector_result = query_db([detector_select_by_name % telescope_name])[0][0]
-        # detector_id = int(detector_result[0])
-        # detector_name = detector_result[1]
-        # detector_poly = detector_result[8]
-        # detector_vertices = Detector.get_detector_vertices_from_teglon_db(detector_poly)
-        # detector = Detector(detector_name, detector_vertices, detector_id=detector_id)
-        #
+            sun_separations = sun_coord.separation(all_sky_coords)
+            deg_sep = np.asarray([sp.deg for sp in sun_separations])
 
-        # tiles_to_plot = []
+            plot_axes[detector_name].contour_hpx(deg_sep, colors='darkorange', levels=[0, 60.0], alpha=0.5, linewidths=0.2)
+            plot_axes[detector_name].contourf_hpx(deg_sep, colors='gold', levels=[0, 60.0], linewidths=0.2, alpha=0.3)
+            plot_axes[detector_name].plot(sun_coord.ra.degree, sun_coord.dec.degree,
+                                       transform=plot_axes[detector_name].get_transform('world'), marker="o",
+                      markersize=8, markeredgecolor="darkorange", markerfacecolor="gold", linewidth=0.05)
 
+            # Airmass constraints
+            net_airmass = all_sky_coords.transform_to(AltAz(obstime=sun_set, location=detector_geography[detector_name])).secz
+            for i in np.arange(hours_of_the_night):
+                time_next += timedelta(1/24.)
+                temp = all_sky_coords.transform_to(AltAz(obstime=time_next, location=detector_geography[detector_name])).secz
+                temp_index = np.where((temp >= 1.0) & (temp <= 2.0))
+                net_airmass[temp_index] = 1.5
 
-
-        # with open('%s' % tile_file_path, 'r') as csvfile:
-        #     csvreader = csv.reader(csvfile, delimiter=',', skipinitialspace=True)
-        #     # Skip Header
-        #     next(csvreader)
-        #
-        #     for row in csvreader:
-        #         name = row[0]
-        #         c = coord.SkyCoord(row[1], row[2], unit=(u.hour, u.deg))
-        #         t = Tile(c.ra.degree, c.dec.degree, detector=detector, nside=healpix_map_nside)
-        #
-        #         t.field_name = name
-        #         t.net_prob = float(row[6])
-        #         tiles_to_plot.append(t)
-
-
-        # tile_probs = [t.net_prob for t in tiles_to_plot[0:200]]
-        # min_prob = np.min(tile_probs)
-        # max_prob = np.max(tile_probs)
-        # print("min prob: %s" % min_prob)
-        # print("max prob: %s" % max_prob)
-        #
-        # clr_norm = colors.LogNorm(min_prob, max_prob)
-
-        # This is an arbitrary # to plot... but they're sorted by highest prob first, and we'll never get 1000 pointings
-        # for i, t in enumerate(tiles_to_plot[0:200]):
-        #     # HACK - protecting against plotting errs
-        #     if t.ra_deg < 358 and t.ra_deg > 2:
-        #         t.plot2(ax_h, edgecolor='k',
-        #                 facecolor=plt.cm.Greens(clr_norm(t.net_prob)),
-        #                 linewidth=0.1, alpha=1.0, zorder=9999) #
-
-
-        # Sun
-        time_of_trigger = Time(healpix_map_event_time.to_datetime(), scale="utc")
-        theta, phi = hp.pix2ang(nside=64, ipix=np.arange(hp.nside2npix(64)))
-        ra = np.rad2deg(phi)
-        dec = np.rad2deg(0.5 * np.pi - theta)
-        all_sky_coords = coord.SkyCoord(ra=ra, dec=dec, unit=(u.deg, u.deg))
-
-        if plot_all:
-            for detect_key, detect_val in detector_mapping.items():
-
-                if detect_key == "a":
-                    continue
-
-                # Sun Contours
-                observatory = Observer(location=detector_geography[detect_val])
-                sun_set = observatory.sun_set_time(time_of_trigger, which='nearest', horizon=-18 * u.deg)
-                sun_rise = observatory.sun_rise_time(sun_set, which='next', horizon=-18 * u.deg)
-                sun_coord = get_sun(sun_set)
-                hours_of_the_night = int((sun_rise - sun_set).to_value('hr'))
-                time_next = sun_set
-
-                sun_separations = sun_coord.separation(all_sky_coords)
-                deg_sep = np.asarray([sp.deg for sp in sun_separations])
-
-                plot_axes[detect_val].contour_hpx(deg_sep, colors='darkorange', levels=[0, 60.0], alpha=0.5, linewidths=0.2)
-                plot_axes[detect_val].contourf_hpx(deg_sep, colors='gold', levels=[0, 60.0], linewidths=0.2, alpha=0.3)
-                plot_axes[detect_val].plot(sun_coord.ra.degree, sun_coord.dec.degree,
-                                           transform=plot_axes[detect_val].get_transform('world'), marker="o",
-                          markersize=8, markeredgecolor="darkorange", markerfacecolor="gold", linewidth=0.05)
-
-                # Airmass constraints
-                net_airmass = all_sky_coords.transform_to(AltAz(obstime=sun_set, location=detector_geography[detect_val])).secz
-                for i in np.arange(hours_of_the_night):
-                    time_next += timedelta(1/24.)
-                    temp = all_sky_coords.transform_to(AltAz(obstime=time_next, location=detector_geography[detect_val])).secz
-                    temp_index = np.where((temp >= 1.0) & (temp <= 2.0))
-                    net_airmass[temp_index] = 1.5
-
-                plot_axes[detect_val].contourf_hpx(net_airmass, colors='gray', levels=[np.min(net_airmass), 1.0], linewidths=0.2, alpha=0.3)
-                plot_axes[detect_val].contourf_hpx(net_airmass, colors='gray', levels=[2.0, np.max(net_airmass)], linewidths=0.2, alpha=0.3)
-
-
-
-
-
-
-
-        # ax_h.contour_hpx(deg_sep, colors='darkorange', levels=[0, 60.0], alpha=0.5, linewidths=0.2)
-        # ax_h.contourf_hpx(deg_sep, colors='gold', levels=[0, 60.0], linewidths=0.2, alpha=0.3)
-        # ax_h.plot(sun_coord.ra.degree, sun_coord.dec.degree, transform=ax_h.get_transform('world'), marker="o",
-        #           markersize=10, markeredgecolor="darkorange", markerfacecolor="gold", linewidth=0.05)
-        #
-        #
-        # # Swope Airmass constraints
-        # net_airmass = all_sky_coords.transform_to(AltAz(obstime=sun_set, location=observatory_location)).secz
-        # for i in np.arange(hours_of_the_night):
-        #     time_next += timedelta(1/24.)
-        #     temp = all_sky_coords.transform_to(AltAz(obstime=time_next, location=observatory_location)).secz
-        #     temp_index = np.where((temp >= 1.0) & (temp <= 2.0))
-        #     net_airmass[temp_index] = 1.5
-        #
-        # ax_h.contourf_hpx(net_airmass, colors='gray', levels=[np.min(net_airmass), 1.0], linewidths=0.2, alpha=0.3)
-        # ax_h.contourf_hpx(net_airmass, colors='gray', levels=[2.0, np.max(net_airmass)], linewidths=0.2, alpha=0.3)
+            plot_axes[detector_name].contourf_hpx(net_airmass, colors='gray', levels=[np.min(net_airmass), 1.0], linewidths=0.2, alpha=0.3)
+            plot_axes[detector_name].contourf_hpx(net_airmass, colors='gray', levels=[2.0, np.max(net_airmass)], linewidths=0.2, alpha=0.3)
 
         output_file = "all_telescopes_4D_0.9_bayestar.fits.gz.svg"
         if not plot_all:
