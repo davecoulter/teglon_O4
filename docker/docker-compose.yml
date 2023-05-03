@@ -5,8 +5,8 @@ services:
         platform: linux/amd64
         build: .
         image: "davecoulter/teglon:0.0.1"
-        mem_limit: 16gb
-        cpus: 0.75
+        mem_limit: ${MEM_LIMIT}
+        cpus: ${CPU_LIMIT}
         command: gunicorn --bind 0.0.0.0:5000 web.manage:app --timeout 1200
         volumes:
             - ${VOL_APP}:/app
@@ -25,8 +25,8 @@ services:
       platform: linux/amd64
       build: .
       image: "davecoulter/teglon:0.0.1"
-      mem_limit: 16gb
-      cpus: 0.75
+      mem_limit: ${MEM_LIMIT}
+      cpus: ${CPU_LIMIT}
       command: python /app/web/manage.py run -h 0.0.0.0
       volumes:
         - ${VOL_APP}:/app
@@ -44,8 +44,7 @@ services:
     gw_db:
         container_name: teglon_db
         image: "mysql:8.0.25"
-        mem_limit: 16gb
-        cpus: 0.75
+        mem_limit: ${MEM_LIMIT}
         ports:
             - ${LOCAL_DB_PORT}:3306
         volumes:
@@ -68,8 +67,8 @@ services:
       platform: linux/amd64
       build: .
       image: "davecoulter/teglon:0.0.1"
-      mem_limit: 16gb
-      cpus: 0.75
+      mem_limit: ${MEM_LIMIT}
+      cpus: ${CPU_LIMIT}
       volumes:
         - ${VOL_APP}:/app
       links:
@@ -84,8 +83,8 @@ services:
       platform: linux/amd64
       build: .
       image: "davecoulter/teglon:0.0.1"
-      mem_limit: 16gb
-      cpus: 0.75
+      mem_limit: ${MEM_LIMIT}
+      cpus: ${CPU_LIMIT}
       volumes:
         - ${VOL_APP}:/app
       environment:
