@@ -2,7 +2,6 @@ import csv
 import astropy.coordinates as coord
 import numpy as np
 from astropy import units as u
-# from src.utilities.Database_Helpers import *
 from web.src.utilities.Database_Helpers import *
 
 class Teglon:
@@ -375,6 +374,7 @@ class Teglon:
                 JOIN StaticTile st on st.id = running_tile_prob.id 
                 JOIN Detector d on d.id = running_tile_prob.Detector_id 
                 WHERE 
+                    running_tile_prob.net_prob > 0.0 AND
                     running_tile_prob.cum_prob <= %s AND 
                     running_tile_prob.EBV*%s <= %s AND 
                     st._Dec BETWEEN d.MinDec AND d.MaxDec 
@@ -433,6 +433,7 @@ class Teglon:
                 JOIN StaticTile st on st.id = running_tile_prob.id 
                 JOIN Detector d on d.id = running_tile_prob.Detector_id 
                 WHERE 
+                    running_tile_prob.net_prob > 0.0 AND
                     running_tile_prob.cum_prob <= %s AND 
                     running_tile_prob.EBV*%s <= %s AND 
                     st._Dec BETWEEN d.MinDec AND d.MaxDec 
@@ -492,6 +493,7 @@ class Teglon:
                 JOIN StaticTile st on st.id = running_tile_prob.id 
                 JOIN Detector d on d.id = running_tile_prob.Detector_id 
                 WHERE 
+                    running_tile_prob.net_prob > 0.0 AND
                     running_tile_prob.cum_prob <= %s AND 
                     running_tile_prob.EBV*%s <= %s AND  
                     st.RA BETWEEN %s AND %s AND 
@@ -551,6 +553,7 @@ class Teglon:
                 JOIN StaticTile st on st.id = running_tile_prob.id 
                 JOIN Detector d on d.id = running_tile_prob.Detector_id 
                 WHERE 
+                    running_tile_prob.net_prob > 0.0 AND
                     running_tile_prob.cum_prob <= %s AND 
                     running_tile_prob.EBV*%s <= %s AND  
                     st.RA BETWEEN %s AND %s AND 
@@ -582,6 +585,7 @@ class Teglon:
             JOIN HealpixPixel hp on hp.id = hp_g_w.HealpixPixel_id 
             JOIN SkyPixel_EBV sp_ebv on sp_ebv.N128_SkyPixel_id = hp.N128_SkyPixel_id 
             WHERE 
+                hp_g_w.GalaxyProb > 0.0 AND
                 hp.HealpixMap_id = %s AND 
                 sp_ebv.EBV*%s <= %s AND 
                 g._Dec BETWEEN %s AND %s
@@ -637,6 +641,7 @@ class Teglon:
             JOIN HealpixPixel hp on hp.id = hp_g_w.HealpixPixel_id 
             JOIN SkyPixel_EBV sp_ebv on sp_ebv.N128_SkyPixel_id = hp.N128_SkyPixel_id 
             WHERE 
+                hp_g_w.GalaxyProb > 0.0 AND
                 hp.HealpixMap_id = %s AND 
                 sp_ebv.EBV*%s <= %s AND 
                 g.RA BETWEEN %s AND %s AND 
