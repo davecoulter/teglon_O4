@@ -323,7 +323,7 @@ class Teglon:
 
         output_file = "all_telescopes_4D_0.9_bayestar.fits.gz.svg"
         if not plot_all:
-            output_file = self.options.tile_file.replace(".csv", ".svg")
+            output_file = self.options.tile_file.replace(".txt", ".svg")
 
         output_path = "%s/%s" % (formatted_healpix_dir, output_file)
         fig.savefig(output_path, bbox_inches='tight', format="svg")  # ,dpi=840
