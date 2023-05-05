@@ -17,6 +17,7 @@ from astroplan import Observer
 from astropy.coordinates import AltAz, EarthLocation
 from astropy import units as u
 import astropy.coordinates as coord
+from astropy.table import Table
 
 from web.src.objects.Detector import *
 from web.src.objects.Tile import *
@@ -55,8 +56,7 @@ class Teglon:
 
         parser.add_option('--tile_file', default="{FILENAME}", type="str",
                           help='''Only used when plotting single telescope. Filename of tiles to plot. Otherwise, will 
-                          default to tile files of the form: `{TELE_NAME}_4D_0.9_bayestar.fits.gz.csv` for tiling 
-                          instruments (Swope, Thacher, T80) and `GALAXIES_bayestar.fits.gz.csv` for the Nickel.''')
+                          default to tile files of the form: `{GWID}_{TELE_NAME}_4D_0.9_bayestar.fits.gz.txt`.''')
 
         parser.add_option('--num_tiles', default="-1", type="int",
                           help='''Number of tiles to plot for each tile file. If < 0, plot all. Otherwise, plot indices
@@ -132,16 +132,17 @@ class Teglon:
         tile_files = {}
         if plot_all:
             # get each default tile file for each instrument.
-            default_tile_file_formatted = "{TELE_NAME}_4D_0.9_bayestar.fits.gz.csv"
+            default_tile_file_formatted = "{GWID}_{TELE_NAME}_4D_0.9_bayestar.fits.gz.txt"
 
             for detect_key, detect_val in detector_mapping.items():
                 # DC: Hack - Nickel tiles are simply the galaxies list ...
-                if detect_key != "a" and detect_key != "n":
+                # if detect_key != "a" and detect_key != "n":
+                if detect_key != "a":
                     tile_files[detect_val] = "%s/%s" % (formatted_healpix_dir, default_tile_file_formatted.format(
-                        TELE_NAME=detect_val
+                        GWID=self.options.gw_id, TELE_NAME=detect_val
                     ))
-                elif detect_key == "n":
-                    tile_files[detect_val] = "%s/%s" % (formatted_healpix_dir, "GALAXIES_bayestar.fits.gz.csv")
+                # elif detect_key == "n":
+                #     tile_files[detect_val] = "%s/%s" % (formatted_healpix_dir, "GALAXIES_bayestar.fits.gz.csv")
         else:
             tile_files[detector_mapping[self.options.tele]] = "%s/%s" % (formatted_healpix_dir, self.options.tile_file)
 
@@ -150,7 +151,8 @@ class Teglon:
         plot_axes = {}
         ax_list = []
         if plot_all:
-            fig, ((ax1, ax2), (ax3, ax4), (ax5, ax6)) = plt.subplots(3, 2, subplot_kw={'projection': 'astro hours mollweide'})
+            fig, ((ax1, ax2), (ax3, ax4), (ax5, ax6)) = plt.subplots(3, 2,
+                                                                     subplot_kw={'projection': 'astro hours mollweide'})
             fig.delaxes(ax6)
             plt.tight_layout()
 
@@ -280,34 +282,47 @@ class Teglon:
             detector_vertices = Detector.get_detector_vertices_from_teglon_db(detector_poly)
 
             detector_obj = Detector(detector_name, detector_vertices, detector_id=detector_id)
+            tiles = Table.read(tile_file, format='ascii.ecsv')
+            tiles_to_plot = [Tile(ra, dec, detector=detector_obj, nside=healpix_map_nside,
+                                  net_prob=prob) for ra, dec, prob in zip(tiles["RA"], tiles["Dec"], tiles["Prob"])]
 
-            tiles_to_plot = []
-            with open('%s' % tile_file, 'r') as csvfile:
-                csvreader = csv.reader(csvfile, delimiter=',', skipinitialspace=True)
-                # Skip Header
-                next(csvreader)
+            min_prob = np.min(tiles["Prob"])
+            max_prob = np.max(tiles["Prob"])
+            print("min prob for `%s`: %s" % (detector_name, min_prob))
+            print("max prob for `%s`: %s" % (detector_name, max_prob))
+            clr_norm = colors.LogNorm(min_prob, max_prob)
+            for i, t in enumerate(tiles_to_plot[0:self.options.num_tiles]):
+                if t.ra_deg < 358 and t.ra_deg > 2:
+                    t.plot2(plot_ax, edgecolor='k',
+                            facecolor=plt.cm.Greens(clr_norm(t.net_prob)),
+                            linewidth=0.05, alpha=1.0, zorder=9999)  #
 
-                for row in csvreader:
-                    name = row[0]
-                    c = coord.SkyCoord(row[1], row[2], unit=(u.hour, u.deg))
-                    t = Tile(c.ra.degree, c.dec.degree, detector=detector_obj, nside=healpix_map_nside)
-
-                    t.field_name = name
-                    t.net_prob = float(row[6])
-                    tiles_to_plot.append(t)
-
-                tile_probs = [t.net_prob for t in tiles_to_plot[0:self.options.num_tiles]]
-                min_prob = np.min(tile_probs)
-                max_prob = np.max(tile_probs)
-                print("min prob for `%s`: %s" % (detector_name, min_prob))
-                print("max prob for `%s`: %s" % (detector_name, max_prob))
-
-                clr_norm = colors.LogNorm(min_prob, max_prob)
-                for i, t in enumerate(tiles_to_plot[0:self.options.num_tiles]):
-                    if t.ra_deg < 358 and t.ra_deg > 2:
-                        t.plot2(plot_ax, edgecolor='k',
-                                facecolor=plt.cm.Greens(clr_norm(t.net_prob)),
-                                linewidth=0.05, alpha=1.0, zorder=9999)  #
+            # with open('%s' % tile_file, 'r') as csvfile:
+            #     csvreader = csv.reader(csvfile, delimiter=',', skipinitialspace=True)
+            #     # Skip Header
+            #     next(csvreader)
+            #
+            #     for row in csvreader:
+            #         name = row[0]
+            #         c = coord.SkyCoord(row[1], row[2], unit=(u.hour, u.deg))
+            #         t = Tile(c.ra.degree, c.dec.degree, detector=detector_obj, nside=healpix_map_nside)
+            #
+            #         t.field_name = name
+            #         t.net_prob = float(row[6])
+            #         tiles_to_plot.append(t)
+            #
+            #     tile_probs = [t.net_prob for t in tiles_to_plot[0:self.options.num_tiles]]
+            #     min_prob = np.min(tile_probs)
+            #     max_prob = np.max(tile_probs)
+            #     print("min prob for `%s`: %s" % (detector_name, min_prob))
+            #     print("max prob for `%s`: %s" % (detector_name, max_prob))
+            #
+            #     clr_norm = colors.LogNorm(min_prob, max_prob)
+            #     for i, t in enumerate(tiles_to_plot[0:self.options.num_tiles]):
+            #         if t.ra_deg < 358 and t.ra_deg > 2:
+            #             t.plot2(plot_ax, edgecolor='k',
+            #                     facecolor=plt.cm.Greens(clr_norm(t.net_prob)),
+            #                     linewidth=0.05, alpha=1.0, zorder=9999)  #
 
             # Sun Contours
             observatory = Observer(location=detector_geography[detector_name])
