@@ -320,10 +320,13 @@ class Teglon:
         galaxies_select = '''
             SELECT 
                 g.id, 
-                IFNULL(g.Name_GWGC, 
-                    IFNULL(g.PGC,
-                        IFNULL(g.Name_HyperLEDA, 
-                            IFNULL(g.Name_2MASS, NAME_SDSS_DR12)))) as FieldName,
+                CASE
+                    WHEN NOT (ISNULL(g.Name_GWGC) OR g.Name_GWGC = '' OR g.Name_GWGC = 'null') THEN g.Name_GWGC
+                    WHEN NOT (ISNULL(g.PGC) OR g.PGC = '' OR g.PGC = 'null') THEN g.PGC
+                    WHEN NOT (ISNULL(g.Name_HyperLEDA) OR g.Name_HyperLEDA = '' OR g.Name_HyperLEDA = 'null') THEN g.Name_HyperLEDA
+                    WHEN NOT (ISNULL(g.Name_2MASS) OR g.Name_2MASS = '' OR g.Name_2MASS = 'null') THEN g.Name_2MASS
+                    WHEN NOT (ISNULL(g.NAME_SDSS_DR12) OR g.NAME_SDSS_DR12 = '' OR g.NAME_SDSS_DR12 = 'null') THEN g.NAME_SDSS_DR12
+                  END as FieldName,
                 g.RA, 
                 g._Dec,
                 hp_g_w.GalaxyProb,
