@@ -40,7 +40,7 @@ from astropy.cosmology import z_at_value
 from astropy import units as u
 import astropy.coordinates as coord
 from dustmaps.config import config as dustmaps_config
-from dustmaps.sfd import SFDQuery
+import dustmaps.sfd
 
 import shapely as ss
 from shapely.ops import transform as shapely_transform
@@ -51,22 +51,6 @@ from shapely import geometry
 import healpy as hp
 from ligo.skymap import distance
 
-# import sys
-# sys.path.append('../objects/')
-# sys.path.append('./')
-
-
-# Old
-# from src.utilities.HEALPix_Helpers import *
-# from src.utilities.Database_Helpers import *
-#
-# from src.objects.Detector import *
-# from src.objects.Tile import *
-# from src.objects.SQL_Polygon import *
-# from src.objects.Pixel_Element import *
-# from src.objects.Completeness_Objects import *
-
-# NEW
 from web.src.utilities.HEALPix_Helpers import *
 from web.src.utilities.Database_Helpers import *
 
@@ -75,8 +59,6 @@ from web.src.objects.Tile import *
 from web.src.objects.SQL_Polygon import *
 from web.src.objects.Pixel_Element import *
 from web.src.objects.Completeness_Objects import *
-
-# from mpl_toolkits.basemap import Basemap
 
 import multiprocessing as mp
 
@@ -215,16 +197,14 @@ class Teglon:
         config = RawConfigParser()
         config.read(configFile)
 
-        utilities_base_dir = "./web/src/utilities"
+        utilities_base_dir = "/app/web/src/utilities"
         pickle_output_dir = "%s/pickles/" % utilities_base_dir
         if not os.path.exists(pickle_output_dir):
             os.makedirs(pickle_output_dir)
+
         # Set up dustmaps config
-        # DC - Why is this directory set this way?
         dustmaps_config["data_dir"] = utilities_base_dir
-
-
-
+        dustmaps.sfd.fetch()
 
         print("Initializing database named: %s" % db_name)
 
@@ -710,8 +690,8 @@ class Teglon:
                 nside128_ids.append(pe.id)
 
             c = coord.SkyCoord(nside128_RA, nside128_DEC, unit=(u.deg,u.deg))
-            sfd = SFDQuery()
-            ebv = sfd(c)
+            sfdq = dustmaps.sfd.SFDQuery()
+            ebv = sfdq(c)
 
             t2 = time.time()
 

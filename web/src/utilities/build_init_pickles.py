@@ -3,7 +3,6 @@ import pickle
 import os
 from collections import OrderedDict
 
-from dustmaps.config import config as dustmaps_config
 from dustmaps.sfd import SFDQuery
 
 from web.src.utilities.HEALPix_Helpers import *
@@ -40,10 +39,6 @@ class Teglon:
         pickle_output_dir = "%s/pickles/" % utilities_base_dir
         if not os.path.exists(pickle_output_dir):
             os.makedirs(pickle_output_dir)
-
-        # Set up dustmaps config
-        # DC - Why is this directory set this way?
-        dustmaps_config["data_dir"] = utilities_base_dir
 
         nside2 = 2
         nside2_npix = hp.nside2npix(nside2)

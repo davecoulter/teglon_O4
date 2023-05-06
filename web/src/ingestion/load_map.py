@@ -59,7 +59,7 @@ class Teglon:
     def main(self):
 
         api_endpoint = "https://gracedb.ligo.org/api/"
-        utilities_base_dir = "./web/src/utilities"
+        utilities_base_dir = "/app/web/src/utilities"
         pickle_output_dir = "%s/pickles/" % utilities_base_dir
 
         isDEBUG = False

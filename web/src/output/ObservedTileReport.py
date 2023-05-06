@@ -84,8 +84,6 @@ from astropy.table import Table
 isDEBUG = False
 
 
-# Set up dustmaps config
-config["data_dir"] = "./"
 
 # Generate all pixel indices
 cosmo = LambdaCDM(H0=70, Om0=0.3, Ode0=0.7)
