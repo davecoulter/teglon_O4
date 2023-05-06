@@ -81,6 +81,8 @@ class Teglon:
         # Set up external resource directories
         utilities_base_dir = "./web/src/utilities"
         pickle_output_dir = "%s/pickles/" % utilities_base_dir
+
+        print("Resetting dustmaps config...")
         dustmaps_config.reset()
         dustmaps_config["data_dir"] = utilities_base_dir
 
