@@ -11,7 +11,7 @@ from dustmaps.sfd import SFDQuery
 
 from web.src.objects.Pixel_Element import *
 
-utilities_base_dir = "./web/src/utilities"
+utilities_base_dir = "/app/web/src/utilities"
 dustmaps_config["data_dir"] = utilities_base_dir
 
 nside128 = 128
