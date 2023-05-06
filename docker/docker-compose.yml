@@ -65,12 +65,8 @@ services:
     gw_script:
       container_name: teglon_script
       platform: linux/amd64
-      build:
-        context: .
-        args:
-          DUSTMAPS_CONFIG_DIR: "./web/src/utilities"
-      image: "davecoulter/teglon:0.0.2"
-
+      build: .
+      image: "davecoulter/teglon:0.0.1"
       mem_limit: ${MEM_LIMIT}
       cpus: ${CPU_LIMIT}
       volumes:
@@ -79,6 +75,7 @@ services:
         - gw_db
       environment:
         PYTHONPATH: /app
+        DUSTMAPS_CONFIG_FNAME: /app/web/src/utilities/dustmaps_config.json
       depends_on:
         gw_db:
           condition: service_healthy
