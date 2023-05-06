@@ -23,6 +23,7 @@ from web.src.objects.Detector import *
 from web.src.objects.Tile import *
 from web.src.objects.Pixel_Element import *
 from web.src.utilities.Database_Helpers import *
+from web.src.utilities.filesystem_utilties import *
 
 
 class Teglon:
@@ -125,7 +126,7 @@ class Teglon:
             print("\n**************************")
             return 1
         else:
-            print("\n**************************\nChecked!")
+            print("Checked!\n**************************")
 
 
         formatted_healpix_dir = self.options.healpix_dir
@@ -333,6 +334,7 @@ class Teglon:
 
         output_path = "%s/%s" % (formatted_healpix_dir, output_file)
         fig.savefig(output_path, bbox_inches='tight', format="svg")  # ,dpi=840
+        chmod_outputfile(output_path)
         plt.close('all')
         print("... Done.")
 

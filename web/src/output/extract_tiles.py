@@ -6,6 +6,7 @@ import astropy.coordinates as coord
 import numpy as np
 from astropy import units as u
 from web.src.utilities.Database_Helpers import *
+from web.src.utilities.filesystem_utilties import *
 from astropy.table import Table
 from astropy.io import fits
 
@@ -504,6 +505,7 @@ class Teglon:
 
             output_table.meta['comments'] = comments
             output_table.write(file_output, overwrite=True, format='ascii.ecsv')
+            chmod_outputfile(file_output)
 
         t2 = time.time()
         print("\n********* start DEBUG ***********")
