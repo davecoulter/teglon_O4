@@ -106,6 +106,7 @@ class Teglon:
         }
 
         # Parameter checks
+        print("\n\n**************************\nChecking Parameters...")
         if self.options.gw_id == "":
             is_error = True
             print("GWID is required.")
@@ -119,8 +120,13 @@ class Teglon:
             print("Invalid telescope selection. Available telescopes: %s" % detector_mapping.keys())
 
         if is_error:
+            print("\n\nErrors! See above output.")
             print("Exiting...")
+            print("\n**************************")
             return 1
+        else:
+            print("\n**************************\nChecked!")
+
 
         formatted_healpix_dir = self.options.healpix_dir
         formatted_healpix_dir = formatted_healpix_dir.replace("{GWID}", self.options.gw_id)
