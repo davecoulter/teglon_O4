@@ -65,8 +65,12 @@ services:
     gw_script:
       container_name: teglon_script
       platform: linux/amd64
-      build: .
-      image: "davecoulter/teglon:0.0.1"
+      build:
+        context: .
+        args:
+          DUSTMAPS_CONFIG_DIR: "./web/src/utilities"
+      image: "davecoulter/teglon:0.0.2"
+
       mem_limit: ${MEM_LIMIT}
       cpus: ${CPU_LIMIT}
       volumes:
