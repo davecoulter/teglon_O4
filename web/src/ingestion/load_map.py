@@ -44,8 +44,6 @@ class Teglon:
         parser.add_option('--clobber', action="store_true", default=False,
                           help='''Replace the existing (superevent, healpix_file) combination if it already exists. 
                           If `clobber` not specified and combination exists, return error message.''')
-        # parser.add_option('--load_local_file', action="store_true", default=False,
-        #                   help='''Circumvent downloading map and load map from disk (Default = False)''')
 
         parser.add_option('--skip_swope', action="store_true", default=False,
                           help='''Do not register Swope tiles for this map (Default = False)''')
@@ -99,9 +97,34 @@ class Teglon:
 
         map_check = query_db([healpix_map_select % (self.options.gw_id, self.options.healpix_file)])[0]
         if len(map_check) > 0:
-            is_error = True
-            print("The combination of GWID `%s` and healpix file `%s` already exists in the db. Please choose a "
-                  "unique combination." % (self.options.gw_id, self.options.healpix_file))
+
+            current_map_id = map_check[0][0]
+
+            if self.options.clobber:
+                print("\n************ The combination of GWID `%s` and healpix file `%s` already exists in the db.************ \nClobbering...")
+                # Delete the map in the db...
+
+                create_baks = 'CALL BackupTables(%s);' % current_map_id
+                lock_tables = '''
+                            LOCK TABLE HealpixMap WRITE, HealpixPixel WRITE, HealpixPixel_Completeness WRITE, HealpixPixel_Galaxy_Weight WRITE, 
+                            ObservedTile WRITE, ObservedTile_HealpixPixel WRITE, StaticTile_HealpixPixel WRITE, HealpixMap_bak WRITE, HealpixPixel_bak WRITE, 
+                            HealpixPixel_Completeness_bak WRITE, HealpixPixel_Galaxy_Weight_bak WRITE, ObservedTile_bak WRITE, ObservedTile_HealpixPixel_bak WRITE, 
+                            StaticTile_HealpixPixel_bak WRITE;
+                        '''
+                delete_map = 'CALL DeleteMap(%s);' % current_map_id
+                unlock_tables = 'UNLOCK TABLES;'
+
+                query_db([create_baks], commit=True)
+                query_db([lock_tables], commit=True)
+                query_db([delete_map], commit=True)
+                query_db([unlock_tables], commit=True)
+
+                print("\n************ Map ID `%s` has been deleted, proceeding with load_map...************\n" % current_map_id)
+
+            else:
+                is_error = True
+                print("The combination of GWID `%s` and healpix file `%s` already exists in the db. Please choose a "
+                      "unique combination." % (self.options.gw_id, self.options.healpix_file))
 
         if self.options.skip_swope:
             print("**** Not registering Swope tiles for this event! ****")
