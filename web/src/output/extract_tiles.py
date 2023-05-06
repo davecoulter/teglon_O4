@@ -45,8 +45,8 @@ class Teglon:
         parser.add_option('--cum_prob', default="0.9", type="float",
                           help='Cumulative prob to cover. Default 0.9. Must be > 0.2 and < 0.95')
 
-        parser.add_option('--num_tiles', default="250", type="int",
-                          help='''Return the top `num_tiles` tiles per telescope. Must be > 1. Default 250.''')
+        parser.add_option('--num_tiles', default="1000", type="int",
+                          help='''Return the top `num_tiles` tiles per telescope. Must be > 1. Default 1000.''')
 
         parser.add_option('--min_ra', default="-1.0", type="float",
                           help='''Optional, decimal format. If specified, `min_ra`, `max_ra`, `min_dec`, 
