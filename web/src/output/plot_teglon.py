@@ -9,7 +9,6 @@ from datetime import datetime, timezone, timedelta
 
 from astropy.time import Time
 from astropy.coordinates import get_sun
-from dustmaps.config import config as dustmaps_config
 from dustmaps.sfd import SFDQuery
 from ligo.skymap.postprocess.util import find_greedy_credible_levels
 import ligo.skymap.plot
@@ -79,12 +78,8 @@ class Teglon:
         nside128 = 128
 
         # Set up external resource directories
-        utilities_base_dir = "./web/src/utilities"
+        utilities_base_dir = "/app/web/src/utilities"
         pickle_output_dir = "%s/pickles/" % utilities_base_dir
-
-        print("Resetting dustmaps config...")
-        dustmaps_config.reset()
-        dustmaps_config["data_dir"] = utilities_base_dir
 
         detector_mapping = {
             "s": "SWOPE",

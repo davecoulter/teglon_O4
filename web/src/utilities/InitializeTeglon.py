@@ -203,7 +203,7 @@ class Teglon:
             os.makedirs(pickle_output_dir)
 
         # Set up dustmaps config
-        dustmaps_config["data_dir"] = utilities_base_dir
+        dustmaps_config["data_dir"] = "/dustmaps"
         dustmaps.sfd.fetch()
 
         print("Initializing database named: %s" % db_name)

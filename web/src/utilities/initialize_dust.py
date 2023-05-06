@@ -13,7 +13,7 @@ import dustmaps.sfd
 from web.src.objects.Pixel_Element import *
 
 utilities_base_dir = "/app/web/src/utilities"
-config["data_dir"] = utilities_base_dir
+config["data_dir"] = "/dustmaps"
 dustmaps.sfd.fetch()
 
 nside128 = 128

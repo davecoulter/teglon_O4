@@ -16,4 +16,4 @@ Essential Teglon functions
 * Extract observations
 * Plot observation plans and LIGO localization probably maps 
 * Ingest community EM observations
-* Calculate detection efficiency of a Library transient lightcurves given a map and a set of observations
+* Calculate detection efficiency of a library transient lightcurves given a map and a set of observations
