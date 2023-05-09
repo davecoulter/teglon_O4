@@ -1,50 +1,5 @@
 version: '2.4'
 services:
-    gw_api_prod:
-        container_name: teglon_api_prod
-        platform: linux/amd64
-        build: .
-        image: "davecoulter/teglon:0.0.1"
-        mem_limit: ${MEM_LIMIT}
-        cpus: ${CPU_LIMIT}
-        command: gunicorn --bind 0.0.0.0:5000 web.manage:app --timeout 1200
-        volumes:
-            - ${VOL_APP}:/app
-            - ${VOL_DUSTMAPS}:/dustmaps
-        ports:
-          - 5000:5000
-        links:
-            - gw_db
-        environment:
-          FLASK_APP: web/project/__init__.py
-          PYTHONPATH: /app
-          DUSTMAPS_CONFIG_FNAME: /dustmaps/dustmaps_config.json
-        depends_on:
-          gw_db:
-            condition: service_healthy
-    gw_api_dev:
-      container_name: teglon_api_debug
-      platform: linux/amd64
-      build: .
-      image: "davecoulter/teglon:0.0.1"
-      mem_limit: ${MEM_LIMIT}
-      cpus: ${CPU_LIMIT}
-      command: python /app/web/manage.py run -h 0.0.0.0
-      volumes:
-        - ${VOL_APP}:/app
-        - ${VOL_DUSTMAPS}:/dustmaps
-      ports:
-        - 5000:5000
-      links:
-        - gw_db
-      environment:
-        FLASK_APP: web/project/__init__.py
-        FLASK_DEBUG: 1
-        PYTHONPATH: /app
-        DUSTMAPS_CONFIG_FNAME: /dustmaps/dustmaps_config.json
-      depends_on:
-        gw_db:
-          condition: service_healthy
     gw_db:
         container_name: teglon_db
         image: "mysql:8.0.25"
@@ -69,8 +24,8 @@ services:
     gw_script:
       container_name: teglon_script
       platform: linux/amd64
-      build: .
-      image: "davecoulter/teglon:0.0.1"
+      build: ./teglon_worker
+      image: "ghcr.io/davecoulter/teglon_o4:latest"
       mem_limit: ${MEM_LIMIT}
       cpus: ${CPU_LIMIT}
       volumes:
@@ -84,11 +39,11 @@ services:
       depends_on:
         gw_db:
           condition: service_healthy
-    gw_dev:
-      container_name: teglon_dev
+    gw_dev_no_db:
+      container_name: teglon_dev_no_db
       platform: linux/amd64
-      build: .
-      image: "davecoulter/teglon:0.0.1"
+      build: ./teglon_worker
+      image: "ghcr.io/davecoulter/teglon_o4:latest"
       mem_limit: ${MEM_LIMIT}
       cpus: ${CPU_LIMIT}
       volumes:
@@ -97,23 +52,3 @@ services:
       environment:
         PYTHONPATH: /app
         DUSTMAPS_CONFIG_FNAME: /dustmaps/dustmaps_config.json
-    nginx_prod:
-      build:
-          context: .
-          dockerfile: Dockerfile.nginx
-      volumes:
-        - ${VOL_APP}:/app/
-      ports:
-        - 1337:80
-      depends_on:
-        - gw_api_prod
-    nginx_dev:
-      build:
-        context: .
-        dockerfile: Dockerfile.nginx
-      volumes:
-        - ${VOL_APP}:/app/
-      ports:
-        - 1337:80
-      depends_on:
-        - gw_api_dev

@@ -1,0 +1,91 @@
+version: '2.4'
+services:
+    gw_api:
+        container_name: teglon_api_prod
+        platform: linux/amd64
+        build: ./teglon_worker
+        image: "ghcr.io/davecoulter/teglon_o4:0.0.1"
+        mem_limit: ${MEM_LIMIT}
+        cpus: ${CPU_LIMIT}
+        command: gunicorn --bind 0.0.0.0:5000 web.manage:app --timeout 1200
+        volumes:
+            - ${VOL_APP}:/app
+            - ${VOL_DUSTMAPS}:/dustmaps
+        ports:
+          - 5000:5000
+        links:
+            - gw_db
+        environment:
+          FLASK_APP: web/project/__init__.py
+          PYTHONPATH: /app
+          DUSTMAPS_CONFIG_FNAME: /dustmaps/dustmaps_config.json
+        depends_on:
+          gw_db:
+            condition: service_healthy
+          gw_rabbit:
+            condition: service_healthy
+    gw_db:
+        container_name: teglon_db
+        image: "mysql:8.0.25"
+        mem_limit: ${MEM_LIMIT}
+        ports:
+            - ${LOCAL_DB_PORT}:3306
+        volumes:
+            - ${VOL_DB}:/var/lib/mysql
+            - ./db_init/db_configuration:/etc/mysql/conf.d
+            - ./db_init/init.sql:/docker-entrypoint-initdb.d/1.sql
+            - ./db_init/teglon_O4.sql:/docker-entrypoint-initdb.d/2.sql
+            - ./db_init/angsep.sql:/docker-entrypoint-initdb.d/3.sql
+            - ./db_init/backup_tables.sql:/docker-entrypoint-initdb.d/4.sql
+            - ./db_init/delete_map.sql:/docker-entrypoint-initdb.d/5.sql
+            - ./db_init/teglon_users.sql:/docker-entrypoint-initdb.d/6.sql
+        environment:
+            MYSQL_ROOT_PASSWORD: ${DB_PWD}
+        healthcheck:
+          test: [ "CMD", "mysqladmin" ,"ping", "-h", "localhost" ]
+          timeout: 20s
+          retries: 10
+    gw_nginx:
+      container_name: teglon_nginx
+      build:
+          context: ./nginx
+      volumes:
+        - ${VOL_APP}:/app/
+      ports:
+        - 1337:80
+      depends_on:
+        - gw_api
+    gw_rabbit:
+      container_name: teglon_rabbit
+      hostname: rabbit
+      image: "rabbitmq:3-management"
+      environment:
+        - RABBITMQ_DEFAULT_USER=admin
+        - RABBITMQ_DEFAULT_PASS=mypass
+      ports:
+        - "15672:15672"
+        - "5672:5672"
+      healthcheck:
+        test: rabbitmq-diagnostics -q ping
+        interval: 30s
+        timeout: 30s
+        retries: 3
+    gw_worker:
+      container_name: teglon_worker_prod
+      build: ./teglon_worker
+      image: "ghcr.io/davecoulter/teglon_o4:0.0.1"
+      user: nobody
+      command: celery -A web.project.tasks worker --loglevel=info
+      volumes:
+        - ${VOL_APP}:/app
+        - ${VOL_DUSTMAPS}:/dustmaps
+      environment:
+        PYTHONPATH: /app
+        DUSTMAPS_CONFIG_FNAME: /dustmaps/dustmaps_config.json
+      depends_on:
+        - gw_rabbit
+        - gw_api
+        - gw_db
+      links:
+        - gw_rabbit
+        - gw_db
