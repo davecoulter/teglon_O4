@@ -14,7 +14,12 @@ if __name__ == "__main__":
                               help='LIGO superevent name, e.g. `S190425z` ')
     parser.add_argument('--healpix_dir', default='./web/events/{GWID}', type=str,
                       help='Directory for where to look for the healpix file (Default = ../Events/{GWID})')
+    parser.add_argument('--cum_prob', default=0.91, type=float,
+                        help='''Only used when NOT in `analysis_mode`. Cumulative prob to cover.  
+                        Default 0.91. Must be > 0.2 and < 0.95''')
     parser.add_argument('--healpix_file', default="bayestar.fits.gz", type=str, help='healpix filename')
+    parser.add_argument('--load_local_file', action="store_true", default=False,
+                      help='''Circumvent downloading map and load map from disk (Default = False)''')
     parser.add_argument('--analysis_mode', action="store_true", default=False,
                       help='''Upload the healpix file at the native resolution (Default = False), with all 
                         pixels. Otherwise, upload a rescaled version, and only the 90th percentile pixels.''')
@@ -27,6 +32,7 @@ if __name__ == "__main__":
                       help='''Do not register Thacher tiles for this map (Default = False)''')
     parser.add_argument('--skip_t80', action="store_true", default=False,
                       help='''Do not register T80S_T80S-Cam tiles for this map (Default = False)''')
+    parser.add_argument('--map_type', default="GW", type=str, help='Healpix map type')
 
     args = parser.parse_args()
     teglon.load_map(**vars(args))

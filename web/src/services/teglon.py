@@ -71,7 +71,7 @@ class Teglon:
 
     def extract_tiles(self, gw_id, healpix_dir='./web/events/{GWID}', healpix_file="bayestar.fits.gz", tele="a", band="r",
                       extinct=0.5, prob_type="4D", cum_prob=0.9, num_tiles=1000, min_ra=-1.0, max_ra=-1.0, max_dec=-1.0,
-                      min_dec=-1.0):
+                      min_dec=-1.0, map_type="GW"):
 
         t1 = time.time()
 
@@ -227,6 +227,45 @@ class Teglon:
             LIMIT 1,{num_tiles};
         '''
 
+        composed_tile_query_non_GW = '''
+                    WITH
+                    {aggregate_tile_cte},
+                    running_tile_prob AS (
+                        SELECT 
+                            aggregate_tile.id, 
+                            aggregate_tile.Detector_id, 
+                            aggregate_tile.net_prob, 
+                            aggregate_tile.EBV, 
+                            SUM(aggregate_tile.net_prob) OVER(ORDER BY SUM(aggregate_tile.net_prob) DESC) AS cum_prob 
+                         FROM 
+                            aggregate_tile 
+                        GROUP BY 
+                            aggregate_tile.id, 
+                            aggregate_tile.Detector_id, 
+                            aggregate_tile.net_prob,  
+                            aggregate_tile.EBV 
+                        ORDER BY 
+                            aggregate_tile.net_prob DESC
+                    )
+                    SELECT 
+                        running_tile_prob.id as static_tile_id,  
+                        st.FieldName, 
+                        st.RA, 
+                        st._Dec, 
+                        running_tile_prob.net_prob,
+                        running_tile_prob.EBV,
+                        running_tile_prob.EBV*{f99_coefficient} as A_lambda, 
+                        running_tile_prob.cum_prob 
+                    FROM running_tile_prob 
+                    JOIN StaticTile st on st.id = running_tile_prob.id 
+                    JOIN Detector d on d.id = running_tile_prob.Detector_id 
+                    WHERE 
+                        {where_filter}
+                    ORDER BY 
+                        running_tile_prob.net_prob DESC 
+                    LIMIT 1,{num_tiles};
+                '''
+
         aggregate_tile_4D_cte = '''
             aggregate_tile AS (
                 SELECT 
@@ -263,6 +302,27 @@ class Teglon:
                 JOIN StaticTile_HealpixPixel st_hp on st_hp.StaticTile_id = st.id 
                 JOIN HealpixPixel_Completeness hpc on hpc.HealpixPixel_id = st_hp.HealpixPixel_id 
                 JOIN HealpixPixel hp on hp.id = hpc.HealpixPixel_id 
+                JOIN SkyPixel_EBV sp_ebv on sp_ebv.N128_SkyPixel_id = st.N128_SkyPixel_id 
+                JOIN Detector d on d.id = st.Detector_id 
+                WHERE d.id = {detector_id} and hp.HealpixMap_id = {healpix_map_id} 
+                GROUP BY 
+                    st.id, 
+                    st.Detector_id, 
+                    sp_ebv.EBV
+            )
+        '''
+
+        aggregate_tile_2D_cte_non_GW = '''
+            aggregate_tile AS (
+                SELECT 
+                    st.id, 
+                    st.Detector_id, 
+                    SUM(hp.prob) as net_prob, 
+                    sp_ebv.EBV 
+                FROM 
+                    StaticTile st 
+                JOIN StaticTile_HealpixPixel st_hp on st_hp.StaticTile_id = st.id  
+                JOIN HealpixPixel hp on hp.id = st_hp.HealpixPixel_id 
                 JOIN SkyPixel_EBV sp_ebv on sp_ebv.N128_SkyPixel_id = st.N128_SkyPixel_id 
                 JOIN Detector d on d.id = st.Detector_id 
                 WHERE d.id = {detector_id} and hp.HealpixMap_id = {healpix_map_id} 
@@ -346,9 +406,12 @@ class Teglon:
                                                         healpix_map_id=healpix_map_id, extinct="{extinct}",
                                                         min_dec=min_dec, max_dec=max_dec)
 
-        tile_aggregate = aggregate_tile_4D_cte.format(detector_id="{detector_id}", healpix_map_id=healpix_map_id)
-        if prob_type == "2D":
-            tile_aggregate = aggregate_tile_2D_cte.format(detector_id="{detector_id}", healpix_map_id=healpix_map_id)
+        if map_type == "GW":
+            tile_aggregate = aggregate_tile_4D_cte.format(detector_id="{detector_id}", healpix_map_id=healpix_map_id)
+            if prob_type == "2D":
+                tile_aggregate = aggregate_tile_2D_cte.format(detector_id="{detector_id}", healpix_map_id=healpix_map_id)
+        else:
+            tile_aggregate = aggregate_tile_2D_cte_non_GW.format(detector_id="{detector_id}", healpix_map_id=healpix_map_id)
 
         queries_to_execute = {}
         if extract_all:
@@ -398,14 +461,24 @@ class Teglon:
 
             if detector_name != 'NICKEL':
 
-                queries_to_execute[(detector_name, band_name, band_F99)] = self.compose_tile_query(detector_id,
-                                                                                              band_F99,
-                                                                                              extinct,
-                                                                                              healpix_map_id,
-                                                                                              tile_where,
-                                                                                              tile_aggregate,
-                                                                                              composed_tile_query,
-                                                                                              num_tiles)
+                if map_type == "GW":
+                    queries_to_execute[(detector_name, band_name, band_F99)] = self.compose_tile_query(detector_id,
+                                                                                                  band_F99,
+                                                                                                  extinct,
+                                                                                                  healpix_map_id,
+                                                                                                  tile_where,
+                                                                                                  tile_aggregate,
+                                                                                                  composed_tile_query,
+                                                                                                  num_tiles)
+                else:
+                    queries_to_execute[(detector_name, band_name, band_F99)] = self.compose_tile_query(detector_id,
+                                                                                                       band_F99,
+                                                                                                       extinct,
+                                                                                                       healpix_map_id,
+                                                                                                       tile_where,
+                                                                                                       tile_aggregate,
+                                                                                                       composed_tile_query_non_GW,
+                                                                                                       num_tiles)
             else:
                 w = galaxy_where
                 if not is_box_query:
@@ -442,35 +515,36 @@ class Teglon:
                     row_to_add[-1] = qr[9]
                 output_table.add_row(row_to_add)
 
-            hdul = fits.open(healpix_file_path)
-            hdr = hdul[1].header
-            del hdr['HISTORY']
-            hdr_dict = dict(hdr)
-            output_table.meta['keywords'] = OrderedDict(hdr_dict)
+            if map_type == "GW":
+                hdul = fits.open(healpix_file_path)
+                hdr = hdul[1].header
+                del hdr['HISTORY']
+                hdr_dict = dict(hdr)
+                output_table.meta['keywords'] = OrderedDict(hdr_dict)
 
-            comments = OrderedDict()
-            comments["GW_ID"] = gw_id
-            comments["HPX_DIR"] = formatted_healpix_dir
-            comments["HPX_FILE"] = healpix_file
-            comments["TELESCOPE"] = detector_name
-            comments["A_LAMBDA_BAND"] = band_name
-            comments["F99_BAND_COEF"] = band_F99
-            comments["EXTINCT_THRESH"] = extinct
-            comments["PROB_TYPE"] = prob_type
-            comments["CUM_PROB"] = cum_prob
-            comments["NUM_TILES"] = num_tiles
-            comments["BOX_QUERY"] = is_box_query
-            comments["MIN_RA"] = min_ra
-            comments["MAX_RA"] = max_ra
-            comments["MIN_DEC"] = min_dec
-            comments["MAX_DEC"] = max_dec
-            s = ""
-            for arg in sys.argv:
-                s = s + arg + " "
-            cmd = os.path.basename(sys.executable) + " " + s.strip()
-            comments["CMD"] = cmd
+                comments = OrderedDict()
+                comments["GW_ID"] = gw_id
+                comments["HPX_DIR"] = formatted_healpix_dir
+                comments["HPX_FILE"] = healpix_file
+                comments["TELESCOPE"] = detector_name
+                comments["A_LAMBDA_BAND"] = band_name
+                comments["F99_BAND_COEF"] = band_F99
+                comments["EXTINCT_THRESH"] = extinct
+                comments["PROB_TYPE"] = prob_type
+                comments["CUM_PROB"] = cum_prob
+                comments["NUM_TILES"] = num_tiles
+                comments["BOX_QUERY"] = is_box_query
+                comments["MIN_RA"] = min_ra
+                comments["MAX_RA"] = max_ra
+                comments["MIN_DEC"] = min_dec
+                comments["MAX_DEC"] = max_dec
+                s = ""
+                for arg in sys.argv:
+                    s = s + arg + " "
+                cmd = os.path.basename(sys.executable) + " " + s.strip()
+                comments["CMD"] = cmd
 
-            output_table.meta['comments'] = comments
+                output_table.meta['comments'] = comments
             output_table.write(file_output, overwrite=True, format='ascii.ecsv')
             chmod_outputfile(file_output)
 
@@ -480,7 +554,8 @@ class Teglon:
         print("********* end DEBUG ***********\n")
 
     def plot_teglon(self, gw_id, healpix_dir='./web/events/{GWID}', healpix_file="bayestar.fits.gz", tele="a", band="r",
-                    extinct=0.5, tile_file="{FILENAME}", num_tiles=1000, cum_prob_outer=0.9, cum_prob_inner=0.5):
+                    extinct=0.5, tile_file="{FILENAME}", num_tiles=1000, cum_prob_outer=0.9, cum_prob_inner=0.5,
+                    map_type="GW"):
 
         is_error = False
         nside128 = 128
@@ -582,7 +657,10 @@ class Teglon:
         healpix_map_select = "SELECT id, RescaledNSIDE, t_0 FROM HealpixMap WHERE GWID = '%s' and Filename = '%s'"
         healpix_map_result = query_db([healpix_map_select % (gw_id, healpix_file)])[0][0]
         healpix_map_id = int(healpix_map_result[0])
-        healpix_map_event_time = Time(healpix_map_result[2], format="gps")
+
+        healpix_map_event_time = None
+        if map_type == "GW":
+            healpix_map_event_time = Time(healpix_map_result[2], format="gps")
         healpix_map_nside = int(healpix_map_result[1])
 
         select_pix = '''
@@ -604,24 +682,50 @@ class Teglon:
             ORDER BY hp.Pixel_Index;
         '''
 
-        pixels_to_select = select_pix % healpix_map_id
+        select_pix_non_GW = '''
+                    SELECT
+                        hp.id,
+                        hp.HealpixMap_id,
+                        hp.Pixel_Index,
+                        hp.Prob,
+                        hp.N128_SkyPixel_id
+                    FROM HealpixPixel hp 
+                    WHERE hp.HealpixMap_id = %s
+                    ORDER BY hp.Pixel_Index;
+                '''
+
+        if map_type == "GW":
+            pixels_to_select = select_pix % healpix_map_id
+        else:
+            pixels_to_select = select_pix_non_GW % healpix_map_id
+
         map_pix_result = query_db([pixels_to_select])[0]
 
-        map_2d_pix_dict = {int(mpr[2]): float(mpr[3]) for mpr in map_pix_result}
-        map_4d_pix_dict = {int(mpr[2]): float(mpr[4]) for mpr in map_pix_result}
+        if map_type == "GW":
+            map_2d_pix_dict = {int(mpr[2]): float(mpr[3]) for mpr in map_pix_result}
+            map_4d_pix_dict = {int(mpr[2]): float(mpr[4]) for mpr in map_pix_result}
 
-        num_pix = hp.nside2npix(healpix_map_nside)
-        map_2d_pix = np.zeros(num_pix)
-        map_4d_pix = np.zeros(num_pix)
+            num_pix = hp.nside2npix(healpix_map_nside)
+            map_2d_pix = np.zeros(num_pix)
+            map_4d_pix = np.zeros(num_pix)
 
-        for i, mp in enumerate(map_2d_pix):  # same number of pix, re-use enumeration
-            if i in map_2d_pix_dict:
-                map_2d_pix[i] = map_2d_pix_dict[i]
-            if i in map_4d_pix_dict:
-                map_4d_pix[i] = map_4d_pix_dict[i]
+            for i, mp in enumerate(map_2d_pix):  # same number of pix, re-use enumeration
+                if i in map_2d_pix_dict:
+                    map_2d_pix[i] = map_2d_pix_dict[i]
+                if i in map_4d_pix_dict:
+                    map_4d_pix[i] = map_4d_pix_dict[i]
 
-        _90_50_levels_2d = find_greedy_credible_levels(np.asarray(map_2d_pix))
-        _90_50_levels_4d = find_greedy_credible_levels(np.asarray(map_4d_pix))
+            _90_50_levels_2d = find_greedy_credible_levels(np.asarray(map_2d_pix))
+            _90_50_levels_4d = find_greedy_credible_levels(np.asarray(map_4d_pix))
+        else:
+            map_2d_pix_dict = {int(mpr[2]): float(mpr[3]) for mpr in map_pix_result}
+            num_pix = hp.nside2npix(healpix_map_nside)
+            map_2d_pix = np.zeros(num_pix)
+            for i, mp in enumerate(map_2d_pix):  # same number of pix, re-use enumeration
+                if i in map_2d_pix_dict:
+                    map_2d_pix[i] = map_2d_pix_dict[i]
+            _90_50_levels_2d = find_greedy_credible_levels(np.asarray(map_2d_pix))
+
 
         # Plot Probability
         for detector_name, plot_ax in plot_axes.items():
@@ -657,11 +761,12 @@ class Teglon:
             plot_ax.contourf_hpx(ebv, cmap='Blues', levels=[0.5, np.max(ebv)], linewidths=0.2, alpha=0.3)
 
         # Sun
-        time_of_trigger = Time(healpix_map_event_time.to_datetime(), scale="utc")
-        theta, phi = hp.pix2ang(nside=64, ipix=np.arange(hp.nside2npix(64)))
-        ra = np.rad2deg(phi)
-        dec = np.rad2deg(0.5 * np.pi - theta)
-        all_sky_coords = coord.SkyCoord(ra=ra, dec=dec, unit=(u.deg, u.deg))
+        if map_type == "GW":
+            time_of_trigger = Time(healpix_map_event_time.to_datetime(), scale="utc")
+            theta, phi = hp.pix2ang(nside=64, ipix=np.arange(hp.nside2npix(64)))
+            ra = np.rad2deg(phi)
+            dec = np.rad2deg(0.5 * np.pi - theta)
+            all_sky_coords = coord.SkyCoord(ra=ra, dec=dec, unit=(u.deg, u.deg))
 
         # Pointings
         detector_select_by_name = '''
@@ -705,43 +810,45 @@ class Teglon:
                                 facecolor=plt.cm.Greens(clr_norm(t.net_prob)),
                                 linewidth=0.05, alpha=1.0, zorder=9999)
 
-            # Sun Contours
-            observatory = Observer(location=detector_geography[detector_name])
-            sun_set = observatory.sun_set_time(time_of_trigger, which='nearest', horizon=-18 * u.deg)
-            sun_rise = observatory.sun_rise_time(sun_set, which='next', horizon=-18 * u.deg)
-            sun_coord = get_sun(sun_set)
-            hours_of_the_night = int((sun_rise - sun_set).to_value('hr'))
-            time_next = sun_set
+            if map_type == "GW":
+                # Sun Contours
+                observatory = Observer(location=detector_geography[detector_name])
+                sun_set = observatory.sun_set_time(time_of_trigger, which='nearest', horizon=-18 * u.deg)
+                sun_rise = observatory.sun_rise_time(sun_set, which='next', horizon=-18 * u.deg)
+                sun_coord = get_sun(sun_set)
+                hours_of_the_night = int((sun_rise - sun_set).to_value('hr'))
+                time_next = sun_set
 
-            sun_separations = sun_coord.separation(all_sky_coords)
-            deg_sep = np.asarray([sp.deg for sp in sun_separations])
+                sun_separations = sun_coord.separation(all_sky_coords)
+                deg_sep = np.asarray([sp.deg for sp in sun_separations])
 
-            plot_axes[detector_name].contour_hpx(deg_sep, colors='darkorange', levels=[0, 60.0], alpha=0.5,
-                                                 linewidths=0.2)
-            plot_axes[detector_name].contourf_hpx(deg_sep, colors='gold', levels=[0, 60.0], linewidths=0.2, alpha=0.3)
-            plot_axes[detector_name].plot(sun_coord.ra.degree, sun_coord.dec.degree,
-                                          transform=plot_axes[detector_name].get_transform('world'), marker="o",
-                                          markersize=8, markeredgecolor="darkorange", markerfacecolor="gold",
-                                          linewidth=0.05)
+                plot_axes[detector_name].contour_hpx(deg_sep, colors='darkorange', levels=[0, 60.0], alpha=0.5,
+                                                     linewidths=0.2)
+                plot_axes[detector_name].contourf_hpx(deg_sep, colors='gold', levels=[0, 60.0], linewidths=0.2, alpha=0.3)
+                plot_axes[detector_name].plot(sun_coord.ra.degree, sun_coord.dec.degree,
+                                              transform=plot_axes[detector_name].get_transform('world'), marker="o",
+                                              markersize=8, markeredgecolor="darkorange", markerfacecolor="gold",
+                                              linewidth=0.05)
 
-            # Airmass constraints
-            net_airmass = all_sky_coords.transform_to(
-                AltAz(obstime=sun_set, location=detector_geography[detector_name])).secz
-            for i in np.arange(hours_of_the_night):
-                time_next += timedelta(1 / 24.)
-                temp = all_sky_coords.transform_to(
-                    AltAz(obstime=time_next, location=detector_geography[detector_name])).secz
-                temp_index = np.where((temp >= 1.0) & (temp <= 2.0))
-                net_airmass[temp_index] = 1.5
+                # Airmass constraints
+                net_airmass = all_sky_coords.transform_to(
+                    AltAz(obstime=sun_set, location=detector_geography[detector_name])).secz
+                for i in np.arange(hours_of_the_night):
+                    time_next += timedelta(1 / 24.)
+                    temp = all_sky_coords.transform_to(
+                        AltAz(obstime=time_next, location=detector_geography[detector_name])).secz
+                    temp_index = np.where((temp >= 1.0) & (temp <= 2.0))
+                    net_airmass[temp_index] = 1.5
 
-            plot_axes[detector_name].contourf_hpx(net_airmass, colors='gray', levels=[np.min(net_airmass), 1.0],
-                                                  linewidths=0.2, alpha=0.3)
-            plot_axes[detector_name].contourf_hpx(net_airmass, colors='gray', levels=[2.0, np.max(net_airmass)],
-                                                  linewidths=0.2, alpha=0.3)
+                plot_axes[detector_name].contourf_hpx(net_airmass, colors='gray', levels=[np.min(net_airmass), 1.0],
+                                                      linewidths=0.2, alpha=0.3)
+                plot_axes[detector_name].contourf_hpx(net_airmass, colors='gray', levels=[2.0, np.max(net_airmass)],
+                                                      linewidths=0.2, alpha=0.3)
 
         output_file = "all_telescopes_4D_0.9_bayestar.fits.gz.svg"
         if not plot_all:
-            output_file = tile_file.replace(".txt", ".svg")
+            file_name = tile_file.split("/")[-1]
+            output_file = file_name.replace(".txt", ".svg")
 
         output_path = "%s/%s" % (formatted_healpix_dir, output_file)
         fig.savefig(output_path, bbox_inches='tight', format="svg")  # ,dpi=840
@@ -749,8 +856,10 @@ class Teglon:
         plt.close('all')
         print("... Done.")
 
-    def load_map(self, gw_id, healpix_dir='./web/events/{GWID}', healpix_file="bayestar.fits.gz", analysis_mode=False,
-                 clobber=False, skip_swope=False, skip_thacher=False, skip_t80=False):
+    def load_map(self, gw_id, healpix_dir='./web/events/{GWID}', healpix_file="bayestar.fits.gz",
+                 load_local_file=False, cum_prob=0.91,
+                 analysis_mode=False, clobber=False, skip_swope=False, skip_thacher=False, skip_t80=False,
+                 map_type="GW"):
 
         api_endpoint = "https://gracedb.ligo.org/api/"
         utilities_base_dir = "/app/web/src/utilities"
@@ -772,6 +881,10 @@ class Teglon:
         if gw_id == "":
             is_error = True
             print("GWID is required.")
+
+        if not analysis_mode and (cum_prob < 0.2 or cum_prob > 0.95):
+            is_error = True
+            print("CUM_PROB must be > 0.2 and < 0.95")
 
         formatted_healpix_dir = healpix_dir
         formatted_candidates_dir = healpix_dir + "/candidates"
@@ -796,7 +909,7 @@ class Teglon:
 
             if clobber:
                 print(
-                    "\n************ The combination of GWID `%s` and healpix file `%s` already exists in the db.************ \nClobbering...")
+                    "\n************ The combination of MAPID `%s` and healpix file `%s` already exists in the db.************ \nClobbering...")
                 # Delete the map in the db...
 
                 create_baks = 'CALL BackupTables(%s);' % current_map_id
@@ -907,60 +1020,53 @@ class Teglon:
             # Create target directory if it doesn't already exist...
             if not os.path.exists(formatted_healpix_dir):
                 os.mkdir(formatted_healpix_dir)
-                print("\n\nDirectory ", formatted_healpix_dir, " Created ")
+                print("\nDirectory ", formatted_healpix_dir, " Created ")
             else:
-                print("\n\nDirectory ", formatted_healpix_dir, " already exists")
+                print("\nDirectory ", formatted_healpix_dir, " already exists")
 
             if not os.path.exists(formatted_candidates_dir):
                 os.mkdir(formatted_candidates_dir)
-                print("\n\nDirectory ", formatted_candidates_dir, " Created ")
+                print("\nDirectory ", formatted_candidates_dir, " Created ")
             else:
-                print("\n\nDirectory ", formatted_candidates_dir, " already exists")
+                print("\nDirectory ", formatted_candidates_dir, " already exists")
 
             if not os.path.exists(formatted_obs_tiles_dir):
                 os.mkdir(formatted_obs_tiles_dir)
-                print("\n\nDirectory ", formatted_obs_tiles_dir, " Created ")
+                print("\nDirectory ", formatted_obs_tiles_dir, " Created ")
             else:
-                print("\n\nDirectory ", formatted_obs_tiles_dir, " already exists")
+                print("\nDirectory ", formatted_obs_tiles_dir, " already exists")
 
             if not os.path.exists(formatted_model_dir):
                 os.mkdir(formatted_model_dir)
-                print("\n\nDirectory ", formatted_model_dir, " Created ")
+                print("\nDirectory ", formatted_model_dir, " Created ")
             else:
-                print("\n\nDirectory ", formatted_model_dir, " already exists")
+                print("\nDirectory ", formatted_model_dir, " already exists")
 
             try:
                 t1 = time.time()
 
-                gdb_client = GraceDb(api_endpoint)
-                event_json = gdb_client.superevent(gw_id).json()
-                far = event_json["far"]
-                t_0 = event_json["t_0"]
-                t_0_time_obj = Time(t_0, scale="utc", format="gps")
-                t_0_datetime_str = t_0_time_obj.to_value(format="iso")
-                gw_url = event_json["links"]["self"]
+                if map_type == "GW":
 
-                # Download and save map file.
-                # The default healpix_file - "bayestar.fits.gz" always has the most up-to-date flat file
-                #   in a search context
-                file_response = gdb_client.files(gw_id, healpix_file)
-                with open(hpx_path, "wb") as f:
-                    f.write(file_response.data)
+                    gdb_client = GraceDb(api_endpoint)
+                    event_json = gdb_client.superevent(gw_id).json()
+                    far = event_json["far"]
+                    t_0 = event_json["t_0"]
+                    t_0_time_obj = Time(t_0, scale="utc", format="gps")
+                    t_0_datetime_str = t_0_time_obj.to_value(format="iso")
+                    gw_url = event_json["links"]["self"]
 
-                # print("Downloading `%s`..." % healpix_file)
-                # t1 = time.time()
-                # gw_file_formatter = "https://gracedb.ligo.org/apiweb/superevents/%s/files/%s"
-                # gw_file = gw_file_formatter % (gw_id, healpix_file)
-                #
-                # with urllib.request.urlopen(gw_file) as response:
-                #     with open(hpx_path, 'wb') as out_file:
-                #         shutil.copyfileobj(response, out_file)
+                    # Download and save map file.
+                    # The default healpix_file - "bayestar.fits.gz" always has the most up-to-date flat file
+                    #   in a search context
+                    file_response = gdb_client.files(gw_id, healpix_file)
+                    with open(hpx_path, "wb") as f:
+                        f.write(file_response.data)
 
-                t2 = time.time()
+                    t2 = time.time()
 
-                print("\n********* start DEBUG ***********")
-                print("Downloading `%s` - execution time: %s" % (healpix_file, (t2 - t1)))
-                print("********* end DEBUG ***********\n")
+                    print("\n********* start DEBUG ***********")
+                    print("Downloading `%s` - execution time: %s" % (healpix_file, (t2 - t1)))
+                    print("********* end DEBUG ***********\n")
 
             except urllib.error.HTTPError as e:
                 print("\nError:")
@@ -981,130 +1087,129 @@ class Teglon:
                 print("\n\tExiting...")
                 return 1
 
-            # Get event details from GraceDB page
-            # try:
-            #     print("Scraping `%s` details..." % gw_id)
-            #     t1 = time.time()
-            #     gw_url_formatter = "https://gracedb.ligo.org/superevents/%s/view/"
-            #     gw_url = gw_url_formatter % gw_id
-            #
-            #     r = requests.get(gw_url)
-            #     data = r.text
-            #     soup = BeautifulSoup(data, "lxml")
-            #
-            #     ## Current HTML is different. HACK: adding hard coded values so that this just works
-            #     # tds = soup.find("table", {"class": "superevent"}).find_all('tr')[1].find_all('td')
-            #     # FAR_hz = tds[3].text
-            #     # FAR_per_yr = tds[4].text
-            #     # t_start = tds[5].text
-            #     # t_0 = tds[6].text
-            #     # t_end = tds[7].text
-            #     # UTC_submission_time = parse(tds[8].text)
-            #
-            #     # 0814 values
-            #     # t_0 = 1249852257.012957
-            #     # UTC_submission_time = parse("2019-08-14 21:11:18")
-            #
-            #     # 0425 values
-            #     t_0 = 1240215503.01
-            #     UTC_submission_time = parse("2019-04-25 08:18:26")
-            #
-            #
-            #     t2 = time.time()
-            #     print("\n********* start DEBUG ***********")
-            #     print("Scraping `%s` details - execution time: %s" % (gw_id, (t2 - t1)))
-            #     print("********* end DEBUG ***********\n")
-            #
-            # except urllib.error.HTTPError as e:
-            #     print("\nError:")
-            #     print(e.code, healpix_file)
-            #     print("\n\tExiting...")
-            #     return 1
-            # except urllib.error.URLError as e:
-            #     print("\nError:")
-            #     if hasattr(e, 'reason'):
-            #         print(e.reason, healpix_file)
-            #     elif hasattr(e, 'code'):
-            #         print(e.code, healpix_file)
-            #     print("\n\tExiting...")
-            #     return 1
-            # except Error as e:
-            #     print("\nError:")
-            #     print(e)
-            #     print("\n\tExiting...")
-            #     return 1
-
             # Unpack healpix file and insert map into db
-            print("Unpacking '%s':%s..." % (gw_id, healpix_file))
-            t1 = time.time()
+            if map_type == "GW":
+                print("Unpacking '%s':%s..." % (gw_id, healpix_file))
+                t1 = time.time()
 
-            (orig_prob, orig_distmu, orig_distsigma, orig_distnorm), header_gen = hp.read_map(hpx_path,
-                                                                                              field=(0, 1, 2, 3),
-                                                                                              h=True)
+                (orig_prob, orig_distmu, orig_distsigma, orig_distnorm), header_gen = hp.read_map(hpx_path,
+                                                                                                  field=(0, 1, 2, 3),
+                                                                                                  h=True)
 
-            header = dict(header_gen)
-            orig_npix = len(orig_prob)
-            print("\tOriginal number of pix in '%s': %s" % (healpix_file, orig_npix))
+                header = dict(header_gen)
+                orig_npix = len(orig_prob)
+                print("\tOriginal number of pix in '%s': %s" % (healpix_file, orig_npix))
 
-            sky_area = 4 * 180 ** 2 / np.pi
-            area_per_orig_px = sky_area / orig_npix
-            print("\tSky Area per original pix in '%s': %s [sq deg]" % (healpix_file, area_per_orig_px))
+                sky_area = 4 * 180 ** 2 / np.pi
+                area_per_orig_px = sky_area / orig_npix
+                print("\tSky Area per original pix in '%s': %s [sq deg]" % (healpix_file, area_per_orig_px))
 
-            orig_map_nside = hp.npix2nside(orig_npix)
-            print("\tOriginal resolution (nside) of '%s': %s\n" % (healpix_file, orig_map_nside))
+                orig_map_nside = hp.npix2nside(orig_npix)
+                print("\tOriginal resolution (nside) of '%s': %s\n" % (healpix_file, orig_map_nside))
+            else:
+                orig_prob, header = hp.read_map(hpx_path, h=True)
+                orig_npix = len(orig_prob)
+
+                sky_area = 4 * 180 ** 2 / np.pi
+                area_per_orig_px = sky_area / orig_npix
+
+                orig_map_nside = hp.npix2nside(orig_npix)
+
+                orig_distmu = None
+                orig_distsigma = None
+                orig_distnorm = None
 
             # Check if NSIDE is > 256. If it is, and the --orig_res flag is not specified, rescale map to NSIDE 256
             if orig_map_nside > nside256 and not analysis_mode:
                 print("Rescaling map to NSIDE = 256")
-                rescaled_prob, rescaled_distmu, rescaled_distsigma, rescaled_distnorm = hp.ud_grade([orig_prob,
-                                                                                                     orig_distmu,
-                                                                                                     orig_distsigma,
-                                                                                                     orig_distnorm],
-                                                                                                    nside_out=nside256,
-                                                                                                    order_in="RING",
-                                                                                                    order_out="RING")
-                rescaled_npix = len(rescaled_prob)
-                print("\tRescaled number of pix in '%s': %s" % (healpix_file, rescaled_npix))
+                if map_type == "GW":
+                    rescaled_prob, rescaled_distmu, rescaled_distsigma, rescaled_distnorm = hp.ud_grade([orig_prob,
+                                                                                                         orig_distmu,
+                                                                                                         orig_distsigma,
+                                                                                                         orig_distnorm],
+                                                                                                        nside_out=nside256,
+                                                                                                        order_in="RING",
+                                                                                                        order_out="RING")
+                    rescaled_npix = len(rescaled_prob)
+                    print("\tRescaled number of pix in '%s': %s" % (healpix_file, rescaled_npix))
 
-                area_per_rescaled_px = sky_area / rescaled_npix
-                print("\tSky Area per rescaled pix in '%s': %s [sq deg]" % (healpix_file, area_per_rescaled_px))
+                    area_per_rescaled_px = sky_area / rescaled_npix
+                    print("\tSky Area per rescaled pix in '%s': %s [sq deg]" % (healpix_file, area_per_rescaled_px))
 
-                rescaled_map_nside = hp.npix2nside(rescaled_npix)
-                print("\tRescaled resolution (nside) of '%s': %s\n" % (healpix_file, rescaled_map_nside))
+                    rescaled_map_nside = hp.npix2nside(rescaled_npix)
+                    print("\tRescaled resolution (nside) of '%s': %s\n" % (healpix_file, rescaled_map_nside))
 
-                original_pix_per_rescaled_pix = orig_npix / rescaled_npix
-                print("Original pix per rescaled pix for %s" % original_pix_per_rescaled_pix)
+                    original_pix_per_rescaled_pix = orig_npix / rescaled_npix
+                    print("Original pix per rescaled pix for %s" % original_pix_per_rescaled_pix)
 
-                print("Renormalizing and initializing rescaled map...")
-                rescaled_prob = rescaled_prob * original_pix_per_rescaled_pix
+                    print("Renormalizing and initializing rescaled map...")
+                    rescaled_prob = rescaled_prob * original_pix_per_rescaled_pix
 
-                prob = rescaled_prob
-                distmu = rescaled_distmu
-                distsigma = rescaled_distsigma
-                distnorm = rescaled_distnorm
-                map_nside = rescaled_map_nside
+                    prob = rescaled_prob
+                    distmu = rescaled_distmu
+                    distsigma = rescaled_distsigma
+                    distnorm = rescaled_distnorm
+                    map_nside = rescaled_map_nside
+                else:
+                    rescaled_prob = hp.ud_grade(orig_prob, nside_out=nside256, order_in="RING", order_out="RING")
+                    rescaled_npix = len(rescaled_prob)
+                    print("\tRescaled number of pix in '%s': %s" % (healpix_file, rescaled_npix))
+
+                    area_per_rescaled_px = sky_area / rescaled_npix
+                    print("\tSky Area per rescaled pix in '%s': %s [sq deg]" % (healpix_file, area_per_rescaled_px))
+
+                    rescaled_map_nside = hp.npix2nside(rescaled_npix)
+                    print("\tRescaled resolution (nside) of '%s': %s\n" % (healpix_file, rescaled_map_nside))
+
+                    original_pix_per_rescaled_pix = orig_npix / rescaled_npix
+                    print("Original pix per rescaled pix for %s" % original_pix_per_rescaled_pix)
+
+                    print("Renormalizing and initializing rescaled map...")
+                    rescaled_prob = rescaled_prob * original_pix_per_rescaled_pix
+
+                    prob = rescaled_prob
+                    distmu = None
+                    distsigma =  None
+                    distnorm = None
+                    map_nside = rescaled_map_nside
             else:
                 print("##### Loading ORIGINAL RESOLUTION MAP @ NSIDE = %s #####" % orig_map_nside)
 
-                prob = orig_prob
-                distmu = orig_distmu
-                distsigma = orig_distsigma
-                distnorm = orig_distnorm
-                map_nside = orig_map_nside
+                if map_type == "GW":
+                    prob = orig_prob
+                    distmu = orig_distmu
+                    distsigma = orig_distsigma
+                    distnorm = orig_distnorm
+                    map_nside = orig_map_nside
+                else:
+                    prob = orig_prob
+                    distmu = None
+                    distsigma = None
+                    distnorm = None
+                    map_nside = orig_map_nside
 
             # Initialize with 0.0 prob to galaxies
-            healpix_map_insert = '''INSERT INTO HealpixMap 
-            (GWID, URL, Filename, NSIDE, t_0, SubmissionTime, NetProbToGalaxies, RescaledNSIDE) 
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s);'''
+            if map_type == "GW":
+                healpix_map_insert = '''INSERT INTO HealpixMap 
+                (GWID, URL, Filename, NSIDE, t_0, SubmissionTime, NetProbToGalaxies, RescaledNSIDE) 
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s);'''
 
-            # healpix_map_data = [(gw_id, gw_url, healpix_file, orig_map_nside, t_0,
-            #                      UTC_submission_time.strftime('%Y-%m-%d %H:%M:%S'), 0.0, map_nside)]
-            healpix_map_data = [(gw_id, gw_url, healpix_file, orig_map_nside, t_0,
-                                 t_0_datetime_str, 0.0, map_nside)]
+                healpix_map_data = [(gw_id, gw_url, healpix_file, orig_map_nside, t_0,
+                                     t_0_datetime_str, 0.0, map_nside)]
 
-            print("\nInserting %s Healpix Map: %s ..." % (gw_id, healpix_file))
-            insert_records(healpix_map_insert, healpix_map_data)
-            healpix_map_id = query_db([healpix_map_select % (gw_id, healpix_file)])[0][0][0]
+                print("\nInserting %s Healpix Map: %s ..." % (gw_id, healpix_file))
+                insert_records(healpix_map_insert, healpix_map_data)
+                healpix_map_id = query_db([healpix_map_select % (gw_id, healpix_file)])[0][0][0]
+            else:
+                healpix_map_insert = '''INSERT INTO HealpixMap 
+                                (GWID, Filename, NSIDE, RescaledNSIDE) 
+                                VALUES (%s,%s,%s,%s);'''
+
+                healpix_map_data = [(gw_id, healpix_file, orig_map_nside, map_nside)]
+
+                print("\nInserting %s Healpix Map: %s ..." % (gw_id, healpix_file))
+                insert_records(healpix_map_insert, healpix_map_data)
+                healpix_map_id = query_db([healpix_map_select % (gw_id, healpix_file)])[0][0][0]
             print("...Done")
 
         if not build_pixels:
@@ -1180,48 +1285,61 @@ class Teglon:
             t1 = time.time()
             max_double_value = 1.5E+308
 
-            from ligo.skymap.postprocess.util import find_greedy_credible_levels
-            percentiles = find_greedy_credible_levels(prob)
-            _90th_indices = np.where(percentiles <= 0.91)
+            working_prob = None
+            working_distmu = None
+            working_distsigma = None
+            working_distnorm = None
+            working_indices = None
+            if not analysis_mode:
+                percentiles = find_greedy_credible_levels(prob)
+                working_indices = np.where(percentiles <= cum_prob)
 
-            windowed_prob = prob[_90th_indices]
-            windowed_distmu = distmu[_90th_indices]
-            windowed_distsigma = distsigma[_90th_indices]
-            windowed_distnorm = distnorm[_90th_indices]
+                working_prob = prob[working_indices]
+                if map_type == "GW":
+                    working_distmu = distmu[working_indices]
+                    working_distsigma = distsigma[working_indices]
+                    working_distnorm = distnorm[working_indices]
+            else:
+                working_prob = prob
+                if map_type == "GW":
+                    working_distmu = distmu
+                    working_distsigma = distsigma
+                    working_distnorm = distnorm
+                working_indices = np.where(prob <= 1.0) # get them all
 
-            # distmu[distmu > max_double_value] = max_double_value
-            # distsigma[distsigma > max_double_value] = max_double_value
-            # distnorm[distnorm > max_double_value] = max_double_value
-            #
-            # mean, stddev, norm = distance.parameters_to_moments(distmu, distsigma)
-            #
-            # mean[mean > max_double_value] = max_double_value
-            # stddev[stddev > max_double_value] = max_double_value
-            # norm[norm > max_double_value] = max_double_value
+            if map_type == "GW":
+                working_distmu[working_distmu > max_double_value] = max_double_value
+                working_distsigma[working_distsigma > max_double_value] = max_double_value
+                working_distnorm[working_distnorm > max_double_value] = max_double_value
 
-            windowed_distmu[windowed_distmu > max_double_value] = max_double_value
-            windowed_distsigma[windowed_distsigma > max_double_value] = max_double_value
-            windowed_distnorm[windowed_distnorm > max_double_value] = max_double_value
+                mean, stddev, norm = distance.parameters_to_moments(working_distmu, working_distsigma)
 
-            mean, stddev, norm = distance.parameters_to_moments(windowed_distmu, windowed_distsigma)
-
-            mean[mean > max_double_value] = max_double_value
-            stddev[stddev > max_double_value] = max_double_value
-            norm[norm > max_double_value] = max_double_value
+                mean[mean > max_double_value] = max_double_value
+                stddev[stddev > max_double_value] = max_double_value
+                norm[norm > max_double_value] = max_double_value
 
             # theta, phi = hp.pix2ang(map_nside, range(len(prob)))
-            theta, phi = hp.pix2ang(map_nside, _90th_indices)
+            # theta, phi = hp.pix2ang(map_nside, _90th_indices)
+            theta, phi = hp.pix2ang(map_nside, working_indices)
             N128_indices = hp.ang2pix(nside128, theta, phi)
 
             healpix_pixel_data = []
             # for i, n128_i in enumerate(N128_indices):
-            for i, (pix_i, n128_i) in enumerate(zip(_90th_indices[0], N128_indices[0])):
+            # for i, (pix_i, n128_i) in enumerate(zip(_90th_indices[0], N128_indices[0])):
+            for i, (pix_i, n128_i) in enumerate(zip(working_indices[0], N128_indices[0])):
                 N128_pixel_id = N128_dict[n128_i]
                 # healpix_pixel_data.append((healpix_map_id, i, prob[i], distmu[i], distsigma[i], distnorm[i], mean[i],
                 #                            stddev[i], norm[i], N128_pixel_id))
-                healpix_pixel_data.append((healpix_map_id, pix_i, windowed_prob[i], windowed_distmu[i],
-                                           windowed_distsigma[i], windowed_distnorm[i], mean[i],
-                                           stddev[i], norm[i], N128_pixel_id))
+
+                # healpix_pixel_data.append((healpix_map_id, pix_i, windowed_prob[i], windowed_distmu[i],
+                #                            windowed_distsigma[i], windowed_distnorm[i], mean[i],
+                #                            stddev[i], norm[i], N128_pixel_id))
+                if map_type == "GW":
+                    healpix_pixel_data.append((healpix_map_id, pix_i, working_prob[i], working_distmu[i],
+                                               working_distsigma[i], working_distnorm[i], mean[i],
+                                               stddev[i], norm[i], N128_pixel_id))
+                else:
+                    healpix_pixel_data.append((healpix_map_id, pix_i, working_prob[i], N128_pixel_id))
 
             # Clean up
             print("freeing `theta`...")
@@ -1257,11 +1375,18 @@ class Teglon:
                 return 1
 
             t1 = time.time()
-            upload_sql = """LOAD DATA LOCAL INFILE '%s' 
-                    INTO TABLE HealpixPixel 
-                    FIELDS TERMINATED BY ',' 
-                    LINES TERMINATED BY '\n' 
-                    (HealpixMap_id, Pixel_Index, Prob, Distmu, Distsigma, Distnorm, Mean, Stddev, Norm, N128_SkyPixel_id);"""
+            if map_type == "GW":
+                upload_sql = """LOAD DATA LOCAL INFILE '%s' 
+                        INTO TABLE HealpixPixel 
+                        FIELDS TERMINATED BY ',' 
+                        LINES TERMINATED BY '\n' 
+                        (HealpixMap_id, Pixel_Index, Prob, Distmu, Distsigma, Distnorm, Mean, Stddev, Norm, N128_SkyPixel_id);"""
+            else:
+                upload_sql = """LOAD DATA LOCAL INFILE '%s' 
+                                    INTO TABLE HealpixPixel 
+                                    FIELDS TERMINATED BY ',' 
+                                    LINES TERMINATED BY '\n' 
+                                    (HealpixMap_id, Pixel_Index, Prob, N128_SkyPixel_id);"""
 
             success = bulk_upload(upload_sql % upload_csv)
             if not success:
@@ -1953,279 +2078,681 @@ class Teglon:
                 print("\nExiting")
                 return 1
 
-        if not build_completeness_func:
-            print("Alternate completeness func...")
-            t1 = time.time()
-            pixel_completeness_upload_csv = "%s/%s_pixel_completeness_upload.csv" % (
-                formatted_healpix_dir, gw_id)
-            composed_completeness_dict = None
-            with open(pickle_output_dir + 'composed_completeness_dict.pkl', 'rb') as handle:
-                composed_completeness_dict = pickle.load(handle)
-
-            pixel_completeness_records = []
-            for p_index, p_tuple in map_pixel_dict.items():
-                pix_id = p_tuple[0]
-                pix_prob = float(p_tuple[3])
-                pix_mean_dist = float(p_tuple[7])
-                N128_id = int(p_tuple[10])
-
-                pix_completeness = np.interp(pix_mean_dist,
-                                             np.asarray(composed_completeness_dict[N128_id][0]),
-                                             np.asarray(composed_completeness_dict[N128_id][1]))
-
-                renorm2dprob = pix_prob * (1.0 - pix_completeness)
-                pixel_completeness_records.append((pix_id, pix_completeness, renorm2dprob, -1.0, healpix_map_id))
-
-            t2 = time.time()
-            print("\n********* start DEBUG ***********")
-            print("Alternate Completeness Calc complete - execution time: %s" % (t2 - t1))
-            print("********* end DEBUG ***********\n")
-
-            # Append to data to CSV
-            try:
+        if map_type == "GW":
+            if not build_completeness_func:
+                print("Alternate completeness func...")
                 t1 = time.time()
-                print("Appending `%s`" % pixel_completeness_upload_csv)
-                with open(pixel_completeness_upload_csv, 'a') as csvfile:
-                    csvwriter = csv.writer(csvfile)
-                    for data in pixel_completeness_records:
-                        csvwriter.writerow(data)
+                pixel_completeness_upload_csv = "%s/%s_pixel_completeness_upload.csv" % (
+                    formatted_healpix_dir, gw_id)
+                composed_completeness_dict = None
+                with open(pickle_output_dir + 'composed_completeness_dict.pkl', 'rb') as handle:
+                    composed_completeness_dict = pickle.load(handle)
+
+                pixel_completeness_records = []
+                for p_index, p_tuple in map_pixel_dict.items():
+                    pix_id = p_tuple[0]
+                    pix_prob = float(p_tuple[3])
+                    pix_mean_dist = float(p_tuple[7])
+                    N128_id = int(p_tuple[10])
+
+                    pix_completeness = np.interp(pix_mean_dist,
+                                                 np.asarray(composed_completeness_dict[N128_id][0]),
+                                                 np.asarray(composed_completeness_dict[N128_id][1]))
+
+                    renorm2dprob = pix_prob * (1.0 - pix_completeness)
+                    pixel_completeness_records.append((pix_id, pix_completeness, renorm2dprob, -1.0, healpix_map_id))
 
                 t2 = time.time()
                 print("\n********* start DEBUG ***********")
-                print("Pixel Completeness CSV append execution time: %s" % (t2 - t1))
+                print("Alternate Completeness Calc complete - execution time: %s" % (t2 - t1))
                 print("********* end DEBUG ***********\n")
-            except Error as e:
-                print("Error in creating Pixel Completeness CSV:\n")
-                print(e)
-                print("\nExiting")
-                return 1
 
-            t1 = time.time()
-            upload_sql = """LOAD DATA LOCAL INFILE '%s' 
-                                INTO TABLE HealpixPixel_Completeness 
-                                FIELDS TERMINATED BY ',' 
-                                LINES TERMINATED BY '\n' 
-                                (HealpixPixel_id, PixelCompleteness, Renorm2DProb, NetPixelProb, HealpixMap_id);"""
+                # Append to data to CSV
+                try:
+                    t1 = time.time()
+                    print("Appending `%s`" % pixel_completeness_upload_csv)
+                    with open(pixel_completeness_upload_csv, 'a') as csvfile:
+                        csvwriter = csv.writer(csvfile)
+                        for data in pixel_completeness_records:
+                            csvwriter.writerow(data)
 
-            success = bulk_upload(upload_sql % pixel_completeness_upload_csv)
-            if not success:
-                print("\nUnsuccessful bulk upload. Exiting...")
-                return 1
+                    t2 = time.time()
+                    print("\n********* start DEBUG ***********")
+                    print("Pixel Completeness CSV append execution time: %s" % (t2 - t1))
+                    print("********* end DEBUG ***********\n")
+                except Error as e:
+                    print("Error in creating Pixel Completeness CSV:\n")
+                    print(e)
+                    print("\nExiting")
+                    return 1
 
-            t2 = time.time()
-            print("\n********* start DEBUG ***********")
-            print("CSV upload execution time: %s" % (t2 - t1))
+                t1 = time.time()
+                upload_sql = """LOAD DATA LOCAL INFILE '%s' 
+                                    INTO TABLE HealpixPixel_Completeness 
+                                    FIELDS TERMINATED BY ',' 
+                                    LINES TERMINATED BY '\n' 
+                                    (HealpixPixel_id, PixelCompleteness, Renorm2DProb, NetPixelProb, HealpixMap_id);"""
 
-            try:
-                print("Removing `%s`..." % pixel_completeness_upload_csv)
-                os.remove(pixel_completeness_upload_csv)
+                success = bulk_upload(upload_sql % pixel_completeness_upload_csv)
+                if not success:
+                    print("\nUnsuccessful bulk upload. Exiting...")
+                    return 1
+
+                t2 = time.time()
+                print("\n********* start DEBUG ***********")
+                print("CSV upload execution time: %s" % (t2 - t1))
+
+                try:
+                    print("Removing `%s`..." % pixel_completeness_upload_csv)
+                    os.remove(pixel_completeness_upload_csv)
+
+                    # clean up
+                    print("freeing `completeness_values_dict`...")
+                    print("freeing `pixel_completeness_records`...")
+                    print("freeing `healpix_pixel_completeness_result`...")
+                    # del completeness_values_dict
+                    del composed_completeness_dict
+                    del pixel_completeness_records
+                    # del healpix_pixel_completeness_result
+
+                    print("... Done")
+                except Error as e:
+                    print("Error in file removal")
+                    print(e)
+                    print("\nExiting")
+                    return 1
+
+            if not build_galaxy_weights:
+                print("Skipping galaxy weights ...")
+            else:
+                print("Building galaxy weights ...")
+
+                t1 = time.time()
+                # Set & Retrieve NetProbToGalaxies
+                # healpix_map_NetProbToGalaxies_update = '''
+                #     UPDATE HealpixMap hm
+                #     SET NetProbToGalaxies = (SELECT 1-SUM(hpc.Renorm2DProb)
+                #                              FROM HealpixPixel_Completeness hpc
+                #                              WHERE HealpixMap_id = %s
+                #                             )
+                #     WHERE hm.id = %s;
+                # '''
+
+                total_pixel_prob_select = '''
+                    SELECT SUM(Prob) FROM HealpixPixel WHERE HealpixMap_id = %s
+                '''
+                total_pixel_prob = float(query_db([total_pixel_prob_select % healpix_map_id])[0][0][0])
+
+                healpix_map_NetProbToGalaxies_update = '''
+                    UPDATE HealpixMap hm
+                    SET NetProbToGalaxies = (SELECT %s-SUM(hpc.Renorm2DProb) 
+                                             FROM HealpixPixel_Completeness hpc 
+                                             WHERE HealpixMap_id = %s
+                                            )
+                    WHERE hm.id = %s;
+                '''
+
+                query_db([healpix_map_NetProbToGalaxies_update % (total_pixel_prob, healpix_map_id, healpix_map_id)],
+                         commit=True)
+
+                select_NetProbToGalaxies = "SELECT NetProbToGalaxies FROM HealpixMap WHERE id = %s"
+                select_NetProbToGalaxies_result = query_db([select_NetProbToGalaxies % healpix_map_id])[0]
+                net_prob_to_galaxies = select_NetProbToGalaxies_result[0][0]
+                print("Net probability to galaxies: %0.5f" % net_prob_to_galaxies)
+
+                t2 = time.time()
+                print("\n********* start DEBUG ***********")
+                print("healpix_map_NetProbToGalaxies execution time: %s" % (t2 - t1))
+                print("********* end DEBUG ***********\n")
+
+                tt1 = time.time()
+
+                galaxy_4D_select = '''
+                SELECT 
+                    g.id,
+                    g.z_dist,
+                    g.z_dist_err,
+                    g.Bweight,
+                    hp.id, 
+                    hp.Pixel_Index,
+                    hp.Prob,
+                    hp.Mean,
+                    hp.Stddev,
+                    ABS(g.z_dist - hp.Mean)/SQRT(POW(hp.Stddev, 2) + POW(g.z_dist_err, 2)) as SigmaTotal 
+                FROM Galaxy g
+                JOIN HealpixPixel hp on hp.Pixel_Index = g.%s_Pixel_Index
+                WHERE hp.HealpixMap_id = %s;
+                '''
+                precompute_result = query_db([galaxy_4D_select % ("N%s" % map_nside, healpix_map_id)])[0]
+                t2 = time.time()
+
+                print("\n********* start DEBUG ***********")
+                print("Precompute Select execution time: %s" % (t2 - t1))
+                print("********* end DEBUG ***********\n")
+
+                galaxy_attributes = []
+                four_d_prob_norm = 0.0
+                for r in precompute_result:
+                    g_id = int(r[0])
+                    hp_id = int(r[4])
+
+                    lum_prob = float(r[3])
+                    two_d_prob = float(r[6])
+                    sigma_total = float(r[9])
+                    z_prob = 1.0 - erf(sigma_total)
+
+                    four_d_prob = z_prob * two_d_prob * lum_prob
+                    four_d_prob_norm += four_d_prob
+
+                    galaxy_attributes.append([g_id, hp_id, lum_prob, z_prob, two_d_prob, four_d_prob])
 
                 # clean up
-                print("freeing `completeness_values_dict`...")
-                print("freeing `pixel_completeness_records`...")
-                print("freeing `healpix_pixel_completeness_result`...")
-                # del completeness_values_dict
-                del composed_completeness_dict
-                del pixel_completeness_records
-                # del healpix_pixel_completeness_result
+                print("freeing `precompute_result`...")
+                del precompute_result
 
-                print("... Done")
-            except Error as e:
-                print("Error in file removal")
-                print(e)
-                print("\nExiting")
-                return 1
+                galaxy_attribute_data = []
+                for g in galaxy_attributes:
+                    # norm_4d_weight = g[4] / four_d_prob_norm
 
-        if not build_galaxy_weights:
-            print("Skipping galaxy weights ...")
-        else:
-            print("Building galaxy weights ...")
+                    g_id = g[0]
+                    hp_id = g[1]
+                    lum_prob = g[2]
+                    z_prob = g[3]
+                    two_d_prob = g[4]
+                    four_d_prob = g[5]
 
-            t1 = time.time()
-            # Set & Retrieve NetProbToGalaxies
-            # healpix_map_NetProbToGalaxies_update = '''
-            #     UPDATE HealpixMap hm
-            #     SET NetProbToGalaxies = (SELECT 1-SUM(hpc.Renorm2DProb)
-            #                              FROM HealpixPixel_Completeness hpc
-            #                              WHERE HealpixMap_id = %s
-            #                             )
-            #     WHERE hm.id = %s;
-            # '''
+                    # norm_4d_weight = g[5] / four_d_prob_norm
+                    norm_4d_weight = four_d_prob / four_d_prob_norm
+                    net_gal_prob = norm_4d_weight * net_prob_to_galaxies
 
-            total_pixel_prob_select = '''
-                SELECT SUM(Prob) FROM HealpixPixel WHERE HealpixMap_id = %s
-            '''
-            total_pixel_prob = float(query_db([total_pixel_prob_select % healpix_map_id])[0][0][0])
+                    galaxy_attribute_data.append(
+                        # (g[0], g[1], g[2], g[3], g[4], norm_4d_weight, norm_4d_weight * net_prob_to_galaxies))
+                        (g_id, hp_id, lum_prob, z_prob, two_d_prob, norm_4d_weight, net_gal_prob, healpix_map_id))
 
-            healpix_map_NetProbToGalaxies_update = '''
-                UPDATE HealpixMap hm
-                SET NetProbToGalaxies = (SELECT %s-SUM(hpc.Renorm2DProb) 
-                                         FROM HealpixPixel_Completeness hpc 
-                                         WHERE HealpixMap_id = %s
-                                        )
-                WHERE hm.id = %s;
-            '''
+                # clean up
+                print("freeing `galaxy_attributes`...")
+                del galaxy_attributes
 
-            query_db([healpix_map_NetProbToGalaxies_update % (total_pixel_prob, healpix_map_id, healpix_map_id)],
-                     commit=True)
+                # Create CSV, upload, and clean up CSV
+                galaxy_attributes_upload_csv = "%s/%s_galaxy_attributes_upload.csv" % (
+                    formatted_healpix_dir, gw_id)
+                try:
+                    t1 = time.time()
+                    print("Creating `%s`" % galaxy_attributes_upload_csv)
+                    with open(galaxy_attributes_upload_csv, 'w') as csvfile:
+                        csvwriter = csv.writer(csvfile)
+                        for data in galaxy_attribute_data:
+                            csvwriter.writerow(data)
 
-            select_NetProbToGalaxies = "SELECT NetProbToGalaxies FROM HealpixMap WHERE id = %s"
-            select_NetProbToGalaxies_result = query_db([select_NetProbToGalaxies % healpix_map_id])[0]
-            net_prob_to_galaxies = select_NetProbToGalaxies_result[0][0]
-            print("Net probability to galaxies: %0.5f" % net_prob_to_galaxies)
+                    t2 = time.time()
+                    print("\n********* start DEBUG ***********")
+                    print("CSV creation execution time: %s" % (t2 - t1))
+                    print("********* end DEBUG ***********\n")
+                except Error as e:
+                    print("Error in creating CSV:\n")
+                    print(e)
+                    print("\nExiting")
+                    return 1
 
-            t2 = time.time()
-            print("\n********* start DEBUG ***********")
-            print("healpix_map_NetProbToGalaxies execution time: %s" % (t2 - t1))
-            print("********* end DEBUG ***********\n")
-
-            tt1 = time.time()
-
-            galaxy_4D_select = '''
-            SELECT 
-                g.id,
-                g.z_dist,
-                g.z_dist_err,
-                g.Bweight,
-                hp.id, 
-                hp.Pixel_Index,
-                hp.Prob,
-                hp.Mean,
-                hp.Stddev,
-                ABS(g.z_dist - hp.Mean)/SQRT(POW(hp.Stddev, 2) + POW(g.z_dist_err, 2)) as SigmaTotal 
-            FROM Galaxy g
-            JOIN HealpixPixel hp on hp.Pixel_Index = g.%s_Pixel_Index
-            WHERE hp.HealpixMap_id = %s;
-            '''
-            precompute_result = query_db([galaxy_4D_select % ("N%s" % map_nside, healpix_map_id)])[0]
-            t2 = time.time()
-
-            print("\n********* start DEBUG ***********")
-            print("Precompute Select execution time: %s" % (t2 - t1))
-            print("********* end DEBUG ***********\n")
-
-            galaxy_attributes = []
-            four_d_prob_norm = 0.0
-            for r in precompute_result:
-                g_id = int(r[0])
-                hp_id = int(r[4])
-
-                lum_prob = float(r[3])
-                two_d_prob = float(r[6])
-                sigma_total = float(r[9])
-                z_prob = 1.0 - erf(sigma_total)
-
-                four_d_prob = z_prob * two_d_prob * lum_prob
-                four_d_prob_norm += four_d_prob
-
-                galaxy_attributes.append([g_id, hp_id, lum_prob, z_prob, two_d_prob, four_d_prob])
-
-            # clean up
-            print("freeing `precompute_result`...")
-            del precompute_result
-
-            galaxy_attribute_data = []
-            for g in galaxy_attributes:
-                # norm_4d_weight = g[4] / four_d_prob_norm
-
-                g_id = g[0]
-                hp_id = g[1]
-                lum_prob = g[2]
-                z_prob = g[3]
-                two_d_prob = g[4]
-                four_d_prob = g[5]
-
-                # norm_4d_weight = g[5] / four_d_prob_norm
-                norm_4d_weight = four_d_prob / four_d_prob_norm
-                net_gal_prob = norm_4d_weight * net_prob_to_galaxies
-
-                galaxy_attribute_data.append(
-                    # (g[0], g[1], g[2], g[3], g[4], norm_4d_weight, norm_4d_weight * net_prob_to_galaxies))
-                    (g_id, hp_id, lum_prob, z_prob, two_d_prob, norm_4d_weight, net_gal_prob, healpix_map_id))
-
-            # clean up
-            print("freeing `galaxy_attributes`...")
-            del galaxy_attributes
-
-            # Create CSV, upload, and clean up CSV
-            galaxy_attributes_upload_csv = "%s/%s_galaxy_attributes_upload.csv" % (
-                formatted_healpix_dir, gw_id)
-            try:
                 t1 = time.time()
-                print("Creating `%s`" % galaxy_attributes_upload_csv)
-                with open(galaxy_attributes_upload_csv, 'w') as csvfile:
-                    csvwriter = csv.writer(csvfile)
-                    for data in galaxy_attribute_data:
-                        csvwriter.writerow(data)
+                upload_sql = """LOAD DATA LOCAL INFILE '%s' 
+                        INTO TABLE HealpixPixel_Galaxy_Weight 
+                        FIELDS TERMINATED BY ',' 
+                        LINES TERMINATED BY '\n' 
+                        (Galaxy_id, HealpixPixel_id, LumWeight, zWeight, Prob2DWeight, Norm4DWeight, GalaxyProb, HealpixMap_id);"""
+
+                success = bulk_upload(upload_sql % galaxy_attributes_upload_csv)
+                if not success:
+                    print("\nUnsuccessful bulk upload. Exiting...")
+                    return 1
 
                 t2 = time.time()
                 print("\n********* start DEBUG ***********")
-                print("CSV creation execution time: %s" % (t2 - t1))
+                print("CSV upload execution time: %s" % (t2 - t1))
+
+                try:
+                    print("Removing `%s`..." % galaxy_attributes_upload_csv)
+                    os.remove(galaxy_attributes_upload_csv)
+
+                    # Clean up
+                    print("freeing `galaxy_attribute_data`...")
+                    del galaxy_attribute_data
+
+                    print("... Done")
+                except Error as e:
+                    print("Error in file removal")
+                    print(e)
+                    print("\nExiting")
+                    return 1
+
+                tt2 = time.time()
+                print("\n********* start DEBUG ***********")
+                print("HealpixPixel_Galaxy Galaxy Attribute execution time: %s" % (tt2 - tt1))
                 print("********* end DEBUG ***********\n")
-            except Error as e:
-                print("Error in creating CSV:\n")
-                print(e)
-                print("\nExiting")
-                return 1
 
-            t1 = time.time()
-            upload_sql = """LOAD DATA LOCAL INFILE '%s' 
-                    INTO TABLE HealpixPixel_Galaxy_Weight 
-                    FIELDS TERMINATED BY ',' 
-                    LINES TERMINATED BY '\n' 
-                    (Galaxy_id, HealpixPixel_id, LumWeight, zWeight, Prob2DWeight, Norm4DWeight, GalaxyProb, HealpixMap_id);"""
+                # update the healpix pixel net prob column...
+                print("Updating healpix pixel net prob...")
+                t1 = time.time()
 
-            success = bulk_upload(upload_sql % galaxy_attributes_upload_csv)
-            if not success:
-                print("\nUnsuccessful bulk upload. Exiting...")
-                return 1
+                healpix_pixel_net_prob_update = '''
+                    UPDATE HealpixPixel_Completeness hpc1 
+                    JOIN 
+                    ( 
+                        SELECT 
+                            hpc2.id, 
+                            (hpc2.Renorm2DProb + IFNULL(SUM(hp_g_w.GalaxyProb),0.0)) as NetPixelProb 
+                        FROM HealpixPixel_Completeness hpc2 
+                        LEFT JOIN HealpixPixel_Galaxy_Weight hp_g_w on hp_g_w.HealpixPixel_id = hpc2.HealpixPixel_id
+                        WHERE hpc2.HealpixMap_id = %s
+                        GROUP BY hpc2.id
+                    ) temp on hpc1.id = temp.id 
+                    SET hpc1.NetPixelProb = temp.NetPixelProb 
+                    WHERE hpc1.HealpixMap_id = %s;
+                '''
 
-            t2 = time.time()
-            print("\n********* start DEBUG ***********")
-            print("CSV upload execution time: %s" % (t2 - t1))
-
-            try:
-                print("Removing `%s`..." % galaxy_attributes_upload_csv)
-                os.remove(galaxy_attributes_upload_csv)
-
-                # Clean up
-                print("freeing `galaxy_attribute_data`...")
-                del galaxy_attribute_data
-
-                print("... Done")
-            except Error as e:
-                print("Error in file removal")
-                print(e)
-                print("\nExiting")
-                return 1
-
-            tt2 = time.time()
-            print("\n********* start DEBUG ***********")
-            print("HealpixPixel_Galaxy Galaxy Attribute execution time: %s" % (tt2 - tt1))
-            print("********* end DEBUG ***********\n")
-
-            # update the healpix pixel net prob column...
-            print("Updating healpix pixel net prob...")
-            t1 = time.time()
-
-            healpix_pixel_net_prob_update = '''
-                UPDATE HealpixPixel_Completeness hpc1 
-                JOIN 
-                ( 
-                    SELECT 
-                        hpc2.id, 
-                        (hpc2.Renorm2DProb + IFNULL(SUM(hp_g_w.GalaxyProb),0.0)) as NetPixelProb 
-                    FROM HealpixPixel_Completeness hpc2 
-                    LEFT JOIN HealpixPixel_Galaxy_Weight hp_g_w on hp_g_w.HealpixPixel_id = hpc2.HealpixPixel_id
-                    WHERE hpc2.HealpixMap_id = %s
-                    GROUP BY hpc2.id
-                ) temp on hpc1.id = temp.id 
-                SET hpc1.NetPixelProb = temp.NetPixelProb 
-                WHERE hpc1.HealpixMap_id = %s;
-            '''
-
-            query_db([healpix_pixel_net_prob_update % (healpix_map_id, healpix_map_id)], commit=True)
+                query_db([healpix_pixel_net_prob_update % (healpix_map_id, healpix_map_id)], commit=True)
+                t2 = time.time()
+                print("\n********* start DEBUG ***********")
+                print("Update HealpixPixel NetProb execution time: %s" % (t2 - t1))
+                print("********* end DEBUG ***********\n")
+        else:
             t2 = time.time()
             print("\n********* start DEBUG ***********")
             print("Update HealpixPixel NetProb execution time: %s" % (t2 - t1))
             print("********* end DEBUG ***********\n")
+
+    def load_observed_tiles(self, gw_id, tile_file, tele, healpix_dir='./web/events/{GWID}', healpix_file="bayestar.fits.gz",
+                            tile_dir="./web/events/{GWID}/observed_tiles"):
+
+        # Band abbreviation, band_id mapping
+        band_mapping = {
+            "g": "SDSS g",
+            "r": "SDSS r",
+            "i": "SDSS i",
+            "Clear": "Clear",
+            "open": "Clear",
+            "J": "UKIRT J",
+            "B": "Landolt B",
+            "V": "Landolt V",
+            "R": "Landolt R",
+            "I": "Landolt I",
+            "u": "SDSS u"
+        }
+
+        detector_mapping = {
+            "s": "SWOPE",
+            "t": "THACHER",
+            "a": "ANDICAM",
+            "n": "NICKEL",
+            "m": "MOSFIRE",
+            "k": "KAIT",
+            "si": "SINISTRO",
+            "w": "WISE",
+            "gt4": "GOTO-4",
+            "css": "MLS10KCCD-CSS",
+            "sw": "Swift/UVOT",
+            "mmt": "MMTCam",
+            "z": "ZTF",
+        }
+
+        is_error = False
+
+        # Parameter checks
+        if gw_id == "":
+            is_error = True
+            print("GWID is required.")
+
+        if healpix_file == "":
+            is_error = True
+            print("Healpix file is required.")
+
+        if tile_file == "":
+            is_error = True
+            print("Tile file is required.")
+
+        if tele == "":
+            is_error = True
+            print("Telescope abbreviation is required.")
+        else:
+            if tele not in detector_mapping:
+                is_error = True
+                print("Unknown telescope. Available options: %s" % detector_mapping)
+
+        formatted_healpix_dir = self.options.healpix_dir
+        if "{GWID}" in formatted_healpix_dir:
+            formatted_healpix_dir = formatted_healpix_dir.replace("{GWID}", self.options.gw_id)
+
+        formatted_tile_dir = self.options.tile_dir
+        if "{GWID}" in formatted_tile_dir:
+            formatted_tile_dir = formatted_tile_dir.replace("{GWID}", self.options.gw_id)
+
+        hpx_path = "%s/%s" % (formatted_healpix_dir, self.options.healpix_file)
+        tile_path = "%s/%s" % (formatted_tile_dir, self.options.tile_file)
+
+        # Check if the above files exist...
+        if not os.path.exists(hpx_path):
+            is_error = True
+            print("Healpix file `%s` does not exist." % hpx_path)
+
+        if not os.path.exists(tile_path):
+            is_error = True
+            print("Tile file `%s` does not exist." % tile_path)
+
+        if is_error:
+            print("Errors! Exiting...")
+            return 1
+
+        print("\tLoading NSIDE 128 pixels...")
+        nside128 = 128
+        N128_dict = None
+        with open('N128_dict.pkl', 'rb') as handle:
+            N128_dict = pickle.load(handle)
+        del handle
+
+        print("\tLoading existing EBV...")
+        ebv = None
+        with open('ebv.pkl', 'rb') as handle:
+            ebv = pickle.load(handle)
+
+        # Get Map ID
+        healpix_map_select = "SELECT id, RescaledNSIDE FROM HealpixMap WHERE GWID = '%s' and Filename = '%s'"
+        healpix_map_id = int(query_db([healpix_map_select % (self.options.gw_id, self.options.healpix_file)])[0][0][0])
+        healpix_map_nside = int(
+            query_db([healpix_map_select % (self.options.gw_id, self.options.healpix_file)])[0][0][1])
+
+        print("Get map pixel")
+        map_pixel_select = "SELECT id, HealpixMap_id, Pixel_Index, Prob, Distmu, Distsigma, Distnorm, Mean, Stddev, Norm, N128_SkyPixel_id FROM HealpixPixel WHERE HealpixMap_id = %s;"
+        q = map_pixel_select % healpix_map_id
+        map_pixels = query_db([q])[0]
+        print("Retrieved %s map pixels..." % len(map_pixels))
+
+        # Initialize map pix dict for later access
+        map_pixel_dict = {}
+        for p in map_pixels:
+            map_pixel_dict[int(p[2])] = p
+
+        band_select = "SELECT id, Name, F99_Coefficient FROM Band WHERE `Name`='%s'"
+        detector_select_by_name = "SELECT id, Name, Deg_width, Deg_height, Deg_radius, Area, MinDec, MaxDec, ST_AsText(Poly) FROM Detector WHERE Name='%s'"
+
+        obs_tile_insert_data = []
+        detectors = {}
+
+        tele_name = detector_mapping[self.options.tele]
+        detector_result = query_db([detector_select_by_name % tele_name])[0][0]
+
+        detector_name = detector_result[1]
+        detector_poly = Detector.get_detector_vertices_from_teglon_db(detector_result[8])
+        detector = Detector(detector_name, detector_poly, detector_id=int(detector_result[0]))
+        # detector = Detector(detector_result[1], float(detector_result[2]), float(detector_result[2]))
+        # detector.id = int(detector_result[0])
+        # detector.area = float(detector_result[5])
+
+        if detector.name not in detectors:
+            detectors[detector.name] = detector
+        print("Processing `%s` for %s" % (tile_path, detector.name))
+
+        # Iterate over lines of a tile
+        with open(tile_path, 'r') as csvfile:
+            # Read CSV lines
+            csvreader = csv.reader(csvfile, delimiter=' ', skipinitialspace=True)
+            for row in csvreader:
+
+                # default PA. Overwrite below if provided
+                position_angle = 0.0
+
+                # Format 0425  - Swope, KAIT
+                file_name = row[0]
+                field_name = row[1]
+                ra = float(row[2])
+                dec = float(row[3])
+                mjd = float(row[4])
+                band = row[5].strip()
+                exp_time = float(row[6])
+                mag_lim = None
+                try:
+                    mag_lim = float(row[7])
+                except:
+                    pass
+
+                # # Format 0425  - Thacher, Nickel
+                # file_name = row[0]
+                # field_name = row[1]
+                # ra = float(row[2])
+                # dec = float(row[3])
+                # exp_time = float(row[4])
+                # mjd = float(row[5])
+                # band = row[6].strip()
+                # mag_lim = None
+                # try:
+                #     mag_lim = float(row[7])
+                # except:
+                #     pass
+
+                # # Format 0425 Treasure Map
+                # file_name = row[0]
+                # field_name = row[1]
+                # ra = float(row[2])
+                # dec = float(row[3])
+                # mjd = float(row[4])
+                # band = row[5].strip()
+                # exp_time = float(row[6])
+                # mag_lim = float(row[7])
+                # position_angle = float(row[8])
+
+                # # Format 0814 Swope, Nickel, Wise
+                # file_name = row[0]
+                # field_name = row[0]
+                # ra = float(row[1])
+                # dec = float(row[2])
+                # mjd = float(row[3])
+                # band = row[4].strip()
+                # exp_time = float(row[5])
+                # mag_lim = float(row[6])
+
+                # # Format 0814 Thacher
+                # file_name = row[0]
+                # field_name = row[1]
+                # ra = float(row[2])
+                # dec = float(row[3])
+                # mjd = float(row[4])
+                # band = row[5].strip()
+                # exp_time = float(row[6])
+                # mag_lim = float(row[7])
+
+                # Format 0814 MOSFIRE
+                # file_name = row[0]
+                # field_name = row[1]
+                # ra = float(row[2])
+                # dec = float(row[3])
+                # mjd = float(row[4])
+                # band = row[5].strip()
+                # exp_time = float(row[6])
+                # mag_lim = None
+
+                # # Format 0814 LCOGT, KAIT
+                # file_name = row[0]
+                # field_name = row[1]
+                # ra = float(row[2])
+                # dec = float(row[3])
+                # mjd = float(row[4])
+                # band = row[5].strip()
+                # exp_time = float(row[6])
+                # mag_lim = None
+                # try:
+                #     mag_lim = float(row[7])
+                # except:
+                #     pass
+
+                # mag_lim = None
+
+                # file_name = row[0]
+                # field_name = row[1]
+                # ra = float(row[2])
+                # dec = float(row[3])
+                # mjd = float(row[4])
+                # band = row[5].strip()
+                # exp_time = float(row[6])
+
+                # exp_time = float(row[4])
+                # mjd = float(row[5])
+                # band = row[6].strip()
+
+                # For ANDICAM, the filter is in the filename...
+                # if self.options.tele == "a" and band == "___":
+                #     band = file_name.split(".")[1]
+
+                # # KAIT data format
+                # ra = float(row[2])
+                # dec = float(row[3])
+                # mjd = float(row[4])
+                # band = row[5].strip()
+
+                # exp_time = None
+                # try:
+                #     exp_time = float(row[6])
+                #     if exp_time <= 0.0:
+                #         exp_time = None
+                # except:
+                #     pass
+
+                # mag_lim = None
+                # try:
+                #     mag_lim = float(row[7])
+                # except:
+                #     pass
+
+                # Get Band_id
+                band_map = band_mapping[band]
+                band_results = query_db([band_select % band_map])[0][0]
+
+                band_id = band_results[0]
+                band_name = band_results[1]
+                band_F99 = float(band_results[2])
+
+                dec_unit = u.hour
+                if self.options.coord_format == DEG_FORMAT:
+                    dec_unit = u.deg
+                c = coord.SkyCoord(ra, dec, unit=(dec_unit, u.deg))
+
+                n128_index = hp.ang2pix(nside128, 0.5 * np.pi - c.dec.radian, c.ra.radian)  # theta, phi
+                n128_id = N128_dict[n128_index]
+
+                # t = Tile(c.ra.degree, c.dec.degree, detector.deg_width, detector.deg_height, int(healpix_map_nside))
+                t = Tile(c.ra.degree, c.dec.degree, detector, int(healpix_map_nside), position_angle_deg=position_angle)
+
+                t.field_name = field_name
+                t.N128_pixel_id = n128_id
+                t.N128_pixel_index = n128_index
+                t.mwe = ebv[n128_index] * band_F99
+                t.mjd = mjd
+                t.exp_time = exp_time
+                t.mag_lim = mag_lim
+
+                # observed_tiles.append(t)
+                obs_tile_insert_data.append((
+                    file_name,
+                    detector.id,
+                    t.field_name,
+                    t.ra_deg,
+                    t.dec_deg,
+                    "POINT(%s %s)" % (t.dec_deg, t.ra_deg - 180.0),  # Dec, RA order due to MySQL convention for lat/lon
+                    t.query_polygon_string,
+                    str(t.mwe),
+                    t.N128_pixel_id,
+                    band_id,
+                    t.mjd,
+                    t.exp_time,
+                    t.mag_lim,
+                    healpix_map_id,
+                    t.position_angle_deg))
+
+        insert_observed_tile = '''
+                    INSERT INTO
+                        ObservedTile (FileName, Detector_id, FieldName, RA, _Dec, Coord, Poly, EBV, N128_SkyPixel_id, Band_id, MJD, Exp_Time, Mag_Lim, HealpixMap_id, PositionAngle)
+                    VALUES (%s, %s, %s, %s, %s, ST_PointFromText(%s, 4326), ST_GEOMFROMTEXT(%s, 4326), %s, %s, %s, %s, %s, %s, %s, %s)
+                '''
+
+        print("Inserting %s tiles..." % len(obs_tile_insert_data))
+        batch_insert(insert_observed_tile, obs_tile_insert_data)
+        print("Done...")
+
+        # Associate map pixels with observed tiles
+        print("Building observed tile-healpix map pixel relation...")
+
+        obs_tile_select = '''
+                    SELECT FileName, id, Detector_id, FieldName, RA, _Dec, Coord, Poly, EBV, N128_SkyPixel_id, Band_id, MJD, Exp_Time, Mag_Lim, HealpixMap_id, PositionAngle 
+                    FROM ObservedTile 
+                    WHERE Detector_id = %s and HealpixMap_id = %s 
+                '''
+
+        # Obtain the tile with id's so they can be used in later INSERTs
+        tile_pixel_data = []
+        for d_name, d in detectors.items():
+            obs_tiles_for_detector = query_db([obs_tile_select % (d.id, healpix_map_id)])[0]
+
+            print("Observed Tiles for %s: %s" % (d.name, len(obs_tiles_for_detector)))
+            for otfd in obs_tiles_for_detector:
+
+                ot_id = int(otfd[1])
+                ra = float(otfd[4])
+                dec = float(otfd[5])
+                pa = float(otfd[15])
+
+                # t = Tile(ra, dec, d.deg_width, d.deg_height, healpix_map_nside)
+                t = Tile(ra, dec, d, healpix_map_nside, position_angle_deg=pa)
+
+                t.id = ot_id
+
+                for p in t.enclosed_pixel_indices:
+                    tile_pixel_data.append((t.id, map_pixel_dict[p][0]))
+
+        print("Length of tile_pixel_data: %s" % len(tile_pixel_data))
+
+        tile_pixel_upload_csv = "%s/ObservedTiles/%s_tile_pixel_upload.csv" % \
+                                (formatted_healpix_dir, detector.name.replace("/", "_"))
+
+        # Create CSV
+        try:
+            t1 = time.time()
+            print("Creating `%s`" % tile_pixel_upload_csv)
+            with open(tile_pixel_upload_csv, 'w') as csvfile:
+                csvwriter = csv.writer(csvfile)
+                for data in tile_pixel_data:
+                    csvwriter.writerow(data)
+
+            t2 = time.time()
+            print("\n********* start DEBUG ***********")
+            print("Tile-Pixel CSV creation execution time: %s" % (t2 - t1))
+            print("********* end DEBUG ***********\n")
+        except Error as e:
+            print("Error in creating Tile-Pixel CSV:\n")
+            print(e)
+            print("\nExiting")
+            return 1
+
+        # clean up
+        print("freeing `tile_pixel_data`...")
+        del tile_pixel_data
+
+        print("Bulk uploading `tile_pixel_data`...")
+        ot_hp_upload_sql = """LOAD DATA LOCAL INFILE '%s' 
+                            INTO TABLE ObservedTile_HealpixPixel 
+                            FIELDS TERMINATED BY ',' 
+                            LINES TERMINATED BY '\n' 
+                            (ObservedTile_id, HealpixPixel_id);"""
+
+        success = bulk_upload(ot_hp_upload_sql % tile_pixel_upload_csv)
+        if not success:
+            print("\nUnsuccessful bulk upload. Exiting...")
+            return 1
+
+        try:
+            print("Removing `%s`..." % tile_pixel_upload_csv)
+            os.remove(tile_pixel_upload_csv)
+
+            print("... Done")
+        except Error as e:
+            print("Error in file removal")
+            print(e)
+            print("\nExiting")
+            return 1

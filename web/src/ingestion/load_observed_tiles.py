@@ -11,23 +11,11 @@ from matplotlib.patches import CirclePolygon
 from matplotlib import colors
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-import sys
-
-sys.path.append('../')
-
 import os
-import optparse
 
 from configparser import RawConfigParser
 import multiprocessing as mp
-import mysql.connector
 
-import mysql.connector as test
-
-print(test.__version__)
-
-from mysql.connector.constants import ClientFlag
-from mysql.connector import Error
 import csv
 import time
 import pickle
@@ -66,10 +54,13 @@ from ligo.skymap import distance
 # from SQL_Polygon import *
 # from Pixel_Element import *
 # from Completeness_Objects import *
-from src.objects.Detector import *
-from src.objects.Tile import *
-from src.objects.Pixel_Element import *
-from src.utilities.Database_Helpers import *
+from web.src.objects.Detector import *
+from web.src.objects.Tile import *
+from web.src.objects.Pixel_Element import *
+from web.src.utilities.Database_Helpers import *
+
+
+
 
 
 import psutil

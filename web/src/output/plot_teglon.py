@@ -38,6 +38,7 @@ if __name__ == "__main__":
     parser.add_argument('--cum_prob_inner', default=0.5, type=float,
                       help='''Cumulative prob to cover in tiles. Default 0.5. Must be > 0.2 and < 0.95
                       and < `cum_prob_inner`''')
+    parser.add_argument('--map_type', default="GW", type=str, help='Healpix map type')
 
     args = parser.parse_args()
     teglon.plot_teglon(**vars(args))
