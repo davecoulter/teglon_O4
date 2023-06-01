@@ -544,7 +544,7 @@ class Teglon:
         tile_files = {}
         if plot_all:
             # get each default tile file for each instrument.
-            default_tile_file_formatted = "{GWID}_{TELE_NAME}_4D_0.9_bayestar.fits.gz.txt"
+            default_tile_file_formatted = "{GWID}_{TELE_NAME}_4D_0.9_%s.txt" % healpix_file
 
             for detect_key, detect_val in detector_mapping.items():
                 if detect_key != "a":
