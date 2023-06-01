@@ -739,7 +739,7 @@ class Teglon:
             plot_axes[detector_name].contourf_hpx(net_airmass, colors='gray', levels=[2.0, np.max(net_airmass)],
                                                   linewidths=0.2, alpha=0.3)
 
-        output_file = "all_telescopes_4D_0.9_bayestar.fits.gz.svg"
+        output_file = "all_telescopes_4D_0.9_%s.svg" % healpix_file
         if not plot_all:
             output_file = tile_file.replace(".txt", ".svg")
 
