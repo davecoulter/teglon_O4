@@ -910,24 +910,28 @@ class Teglon:
                 print("\n\nDirectory ", formatted_healpix_dir, " Created ")
             else:
                 print("\n\nDirectory ", formatted_healpix_dir, " already exists")
+            chmod_outputfile(formatted_healpix_dir)
 
             if not os.path.exists(formatted_candidates_dir):
                 os.mkdir(formatted_candidates_dir)
                 print("\n\nDirectory ", formatted_candidates_dir, " Created ")
             else:
                 print("\n\nDirectory ", formatted_candidates_dir, " already exists")
+            chmod_outputfile(formatted_candidates_dir)
 
             if not os.path.exists(formatted_obs_tiles_dir):
                 os.mkdir(formatted_obs_tiles_dir)
                 print("\n\nDirectory ", formatted_obs_tiles_dir, " Created ")
             else:
                 print("\n\nDirectory ", formatted_obs_tiles_dir, " already exists")
+            chmod_outputfile(formatted_obs_tiles_dir)
 
             if not os.path.exists(formatted_model_dir):
                 os.mkdir(formatted_model_dir)
                 print("\n\nDirectory ", formatted_model_dir, " Created ")
             else:
                 print("\n\nDirectory ", formatted_model_dir, " already exists")
+            chmod_outputfile(formatted_model_dir)
 
             try:
                 t1 = time.time()
@@ -946,6 +950,7 @@ class Teglon:
                 file_response = gdb_client.files(gw_id, healpix_file)
                 with open(hpx_path, "wb") as f:
                     f.write(file_response.data)
+                chmod_outputfile(hpx_path)
 
                 # print("Downloading `%s`..." % healpix_file)
                 # t1 = time.time()
