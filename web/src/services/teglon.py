@@ -430,13 +430,13 @@ class Teglon:
                                                        cum_prob=cum_prob,
                                                        hpx_file=healpix_file, box_query=box_query_addendum)
 
-            cols = ['Field_Name', 'RA', 'Dec', 'Prob', 'EBV', 'A_lambda', 'Lum_Dist', 'B_mag', 'K_mag']
-            dtype = ['U64', 'f8', 'f8', 'f8', 'f8', 'f8', 'f8', 'f8', 'f8']
+            cols = ['Field_Name', 'RA', 'Dec', 'Prob', 'Percentile', 'EBV', 'A_lambda', 'Lum_Dist', 'B_mag', 'K_mag']
+            dtype = ['U64', 'f8', 'f8', 'f8', 'f8', 'f8', 'f8', 'f8', 'f8', 'f8']
 
             output_table = Table(dtype=dtype, names=cols)
 
             for qr in query_results:
-                row_to_add = [qr[1], qr[2], qr[3], qr[4], qr[5], qr[6], qr[7], None, None]
+                row_to_add = [qr[1], qr[2], qr[3], qr[8], qr[4], qr[5], qr[6], qr[7], None, None]
                 if detector_name == "NICKEL":
                     row_to_add[-2] = qr[8]
                     row_to_add[-1] = qr[9]
