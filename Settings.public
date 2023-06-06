@@ -9,4 +9,7 @@ DATABASE_PORT: 3306
 TM_API_TOKEN: <You API token>
 TM_ENDPOINT: https://treasuremap.space/api/v1
 
+[gracedb]
+API_ENDPOINT: https://gracedb.ligo.org/api/
+
 # DATABASE_PASSWORD is a debug pwd, should match teglon_users.sql. Change for production use!
