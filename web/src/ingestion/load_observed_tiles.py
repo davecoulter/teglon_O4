@@ -1,91 +1,24 @@
-import matplotlib
-
-matplotlib.use("Agg")
-
-import matplotlib as mpl
-import matplotlib.pyplot as plt
-from mpl_toolkits.basemap import Basemap
-from matplotlib.patches import Polygon
-from matplotlib.pyplot import cm
-from matplotlib.patches import CirclePolygon
-from matplotlib import colors
-from mpl_toolkits.axes_grid1 import make_axes_locatable
-
-import sys
-
-sys.path.append('../')
-
 import os
-import optparse
-
-from configparser import RawConfigParser
-import multiprocessing as mp
-import mysql.connector
-
-import mysql.connector as test
-
-print(test.__version__)
-
-from mysql.connector.constants import ClientFlag
-from mysql.connector import Error
 import csv
 import time
 import pickle
 from collections import OrderedDict
 
 import numpy as np
-from scipy.special import erf
-from scipy.optimize import minimize, minimize_scalar
-import scipy.stats as st
-from scipy.integrate import simps
-from scipy.interpolate import interp2d
-
-import astropy as aa
-from astropy import cosmology
-from astropy.cosmology import WMAP5, WMAP7, LambdaCDM
-from astropy.coordinates import Distance
-from astropy.coordinates.angles import Angle
-from astropy.cosmology import z_at_value
 from astropy import units as u
 import astropy.coordinates as coord
-from dustmaps.config import config
-from dustmaps.sfd import SFDQuery
-
-import shapely as ss
-from shapely.ops import transform as shapely_transform
-from shapely.geometry import Point
-from shapely.ops import linemerge, unary_union, polygonize, split
-from shapely import geometry
-
 import healpy as hp
-from ligo.skymap import distance
 
-# from Detector import *
-# from HEALPix_Helpers import *
-# from Tile import *
-# from SQL_Polygon import *
-# from Pixel_Element import *
-# from Completeness_Objects import *
-from src.objects.Detector import *
-from src.objects.Tile import *
-from src.objects.Pixel_Element import *
-from src.utilities.Database_Helpers import *
+from astropy.table import Table
+from astropy.io import ascii
 
+from web.src.objects.Detector import *
+from web.src.objects.Tile import *
+from web.src.objects.Pixel_Element import *
+from web.src.utilities.Database_Helpers import *
 
-import psutil
-import shutil
-import urllib.request
-import requests
-from bs4 import BeautifulSoup
-from dateutil.parser import parse
-
-import glob
-import gc
-import json
 
 isDEBUG = False
-
-
 class Teglon:
 
     def add_options(self, parser=None, usage=None, config=None):
@@ -98,57 +31,63 @@ class Teglon:
         parser.add_option('--healpix_file', default="", type="str",
                           help='Healpix filename. Used with `gw_id` to identify unique map.')
 
-        parser.add_option('--healpix_dir', default='../Events/{GWID}', type="str",
+        parser.add_option('--healpix_dir', default='./web/events/{GWID}', type="str",
                           help='Directory for where to look for the healpix file.')
 
-        parser.add_option('--tile_dir', default="../Events/{GWID}/ObservedTiles", type="str",
+        parser.add_option('--tile_dir', default="./web/events/{GWID}/observed_tiles", type="str",
                           help='Directory for where to look for observed tiles to import.')
 
         parser.add_option('--tile_file', default="", type="str", help='File that contains the tile observations.')
 
-        parser.add_option('--tele', default="", type="str",
-                          help='Telescope abbreviation that `tile_file` corresponds to.')
+        # parser.add_option('--tele', default="", type="str",
+        #                   help='Telescope abbreviation that `tile_file` corresponds to.')
 
-        parser.add_option('--coord_format', default="hour", type="str",
-                          help='What format the sky coordinates are in. Available: "hour" or "deg". Default: "hour".')
+        # parser.add_option('--coord_format', default="hour", type="str",
+        #                   help='What format the sky coordinates are in. Available: "hour" or "deg". Default: "hour".')
 
         return (parser)
 
     def main(self):
 
-        HOUR_FORMAT = "hour"
-        DEG_FORMAT = "deg"
+        utilities_base_dir = "/app/web/src/utilities"
+        pickle_output_dir = "%s/pickles/" % utilities_base_dir
+
+        # HOUR_FORMAT = "hour"
+        # DEG_FORMAT = "deg"
 
         # Band abbreviation, band_id mapping
-        band_mapping = {
-            "g": "SDSS g",
-            "r": "SDSS r",
-            "i": "SDSS i",
-            "Clear": "Clear",
-            "open": "Clear",
-            "J": "UKIRT J",
-            "B":"Landolt B",
-            "V": "Landolt V",
-            "R": "Landolt R",
-            "I": "Landolt I",
-            "u": "SDSS u"
-        }
+        # band_mapping = {
+        #     "u": "SDSS u",
+        #     "g": "SDSS g",
+        #     "r": "SDSS r",
+        #     "i": "SDSS i",
+        #     "z": "SDSS z",
+        #     "B": "Landolt B",
+        #     "V": "Landolt V",
+        #     "R": "Landolt R",
+        #     "I": "Landolt I",
+        #     "J": "UKIRT J",
+        #     "H": "UKIRT H",
+        #     "K": "UKIRT K",
+        #     "Clear": "Clear",
+        #     "open": "Clear"
+        # }
 
-        detector_mapping = {
-            "s": "SWOPE",
-            "t": "THACHER",
-            "a": "ANDICAM",
-            "n": "NICKEL",
-            "m": "MOSFIRE",
-            "k": "KAIT",
-            "si": "SINISTRO",
-            "w": "WISE",
-            "gt4": "GOTO-4",
-            "css": "MLS10KCCD-CSS",
-            "sw": "Swift/UVOT",
-            "mmt": "MMTCam",
-            "z": "ZTF",
-        }
+        # detector_mapping = {
+        #     "s": "SWOPE",
+        #     "t": "THACHER",
+        #     "a": "ANDICAM",
+        #     "n": "NICKEL",
+        #     "m": "MOSFIRE",
+        #     "k": "KAIT",
+        #     "si": "SINISTRO",
+        #     "w": "WISE",
+        #     "gt4": "GOTO-4",
+        #     "css": "MLS10KCCD-CSS",
+        #     "sw": "Swift/UVOT",
+        #     "mmt": "MMTCam",
+        #     "z": "ZTF",
+        # }
 
         is_error = False
 
@@ -165,13 +104,13 @@ class Teglon:
             is_error = True
             print("Tile file is required.")
 
-        if self.options.tele == "":
-            is_error = True
-            print("Telescope abbreviation is required.")
+        # if self.options.tele == "":
+        #     is_error = True
+        #     print("Telescope abbreviation is required.")
 
-        if self.options.coord_format != HOUR_FORMAT and self.options.coord_format != DEG_FORMAT:
-            is_error = True
-            print("Incorrect `coord_format`!")
+        # if self.options.coord_format != HOUR_FORMAT and self.options.coord_format != DEG_FORMAT:
+        #     is_error = True
+        #     print("Incorrect `coord_format`!")
 
         if is_error:
             print("Exiting...")
@@ -197,9 +136,9 @@ class Teglon:
             is_error = True
             print("Tile file `%s` does not exist." % tile_path)
 
-        if self.options.tele not in detector_mapping:
-            is_error = True
-            print("Unknown telescope abbreviation: %s " % self.options.tele)
+        # if self.options.tele not in detector_mapping:
+        #     is_error = True
+        #     print("Unknown telescope abbreviation: %s " % self.options.tele)
 
         if is_error:
             print("Exiting...")
@@ -208,14 +147,16 @@ class Teglon:
         print("\tLoading NSIDE 128 pixels...")
         nside128 = 128
         N128_dict = None
-        with open('N128_dict.pkl', 'rb') as handle:
+        print("\tLoading NSIDE 128 pixels...")
+        with open(pickle_output_dir + 'N128_dict.pkl', 'rb') as handle:
             N128_dict = pickle.load(handle)
         del handle
 
-        print("\tLoading existing EBV...")
+        print("\tLoading existing mwe...")
         ebv = None
-        with open('ebv.pkl', 'rb') as handle:
-            ebv = pickle.load(handle)
+        if os.path.exists(pickle_output_dir + "ebv.pkl"):
+            with open(pickle_output_dir + "ebv.pkl", 'rb') as handle:
+                ebv = pickle.load(handle)
 
         # Get Map ID
         healpix_map_select = "SELECT id, RescaledNSIDE FROM HealpixMap WHERE GWID = '%s' and Filename = '%s'"
@@ -240,8 +181,9 @@ class Teglon:
         obs_tile_insert_data = []
         detectors = {}
 
-        tele_name = detector_mapping[self.options.tele]
-        detector_result = query_db([detector_select_by_name % tele_name])[0][0]
+        input_table = ascii.read(tile_path, delimiter=' ')
+        input_detector_name = input_table.meta["comments"]["detector_name"]
+        detector_result = query_db([detector_select_by_name % input_detector_name])[0][0]
 
         detector_name = detector_result[1]
         detector_poly = Detector.get_detector_vertices_from_teglon_db(detector_result[8])
@@ -250,193 +192,274 @@ class Teglon:
         # detector.id = int(detector_result[0])
         # detector.area = float(detector_result[5])
 
+        filter_select = '''
+            SELECT `Name`, id FROM Band;
+        '''
+        filter_result = query_db([filter_select])[0]
+        filter_lookup = {br[0]: int(br[1]) for br in filter_result}
+
+
         if detector.name not in detectors:
             detectors[detector.name] = detector
         print("Processing `%s` for %s" % (tile_path, detector.name))
 
+        for row in input_table:
 
-        # Iterate over lines of a tile
-        with open(tile_path, 'r') as csvfile:
-            # Read CSV lines
-            csvreader = csv.reader(csvfile, delimiter=' ', skipinitialspace=True)
-            for row in csvreader:
+            source = row['source']
+            field_name = row['field_name']
+            ra = row['ra']
+            dec = row['dec']
 
-                # default PA. Overwrite below if provided
-                position_angle = 0.0
+            # theta = 0.5 * np.pi - np.deg2rad(dec)
+            # phi = np.deg2rad(ra)
+            # n128_pix_index = hp.ang2pix(128, theta, phi)
+            n128_pix_index = hp.ang2pix(128, ra, dec, lonlat=True)
+            tile_ebv = ebv[n128_pix_index]
+            n128_id = N128_dict[n128_pix_index]
 
-                # Format 0425  - Swope, KAIT
-                file_name = row[0]
-                field_name = row[1]
-                ra = float(row[2])
-                dec = float(row[3])
-                mjd = float(row[4])
-                band = row[5].strip()
-                exp_time = float(row[6])
-                mag_lim = None
-                try:
-                    mag_lim = float(row[7])
-                except:
-                    pass
+            filter_name = row['filter']
+            filter_id = filter_lookup[filter_name]
 
-                # # Format 0425  - Thacher, Nickel
-                # file_name = row[0]
-                # field_name = row[1]
-                # ra = float(row[2])
-                # dec = float(row[3])
-                # exp_time = float(row[4])
-                # mjd = float(row[5])
-                # band = row[6].strip()
-                # mag_lim = None
-                # try:
-                #     mag_lim = float(row[7])
-                # except:
-                #     pass
+            mjd = row['mjd']
+            exp_time = row['exp_time']
+            mag_lim = row['mag_lim']
+            position_angle = row['position_angle']
 
-                # # Format 0425 Treasure Map
-                # file_name = row[0]
-                # field_name = row[1]
-                # ra = float(row[2])
-                # dec = float(row[3])
-                # mjd = float(row[4])
-                # band = row[5].strip()
-                # exp_time = float(row[6])
-                # mag_lim = float(row[7])
-                # position_angle = float(row[8])
+            x0 = row['x0']
+            if np.isnan(x0):
+                x0 = None
 
-                # # Format 0814 Swope, Nickel, Wise
-                # file_name = row[0]
-                # field_name = row[0]
-                # ra = float(row[1])
-                # dec = float(row[2])
-                # mjd = float(row[3])
-                # band = row[4].strip()
-                # exp_time = float(row[5])
-                # mag_lim = float(row[6])
+            x0_err = row['x0_err']
+            if np.isnan(x0_err):
+                x0_err = None
 
-                # # Format 0814 Thacher
-                # file_name = row[0]
-                # field_name = row[1]
-                # ra = float(row[2])
-                # dec = float(row[3])
-                # mjd = float(row[4])
-                # band = row[5].strip()
-                # exp_time = float(row[6])
-                # mag_lim = float(row[7])
+            a = row['a']
+            if np.isnan(a):
+                a = None
 
-                # Format 0814 MOSFIRE
-                # file_name = row[0]
-                # field_name = row[1]
-                # ra = float(row[2])
-                # dec = float(row[3])
-                # mjd = float(row[4])
-                # band = row[5].strip()
-                # exp_time = float(row[6])
-                # mag_lim = None
+            a_err = row['a_err']
+            if np.isnan(a_err):
+                a_err = None
 
-                # # Format 0814 LCOGT, KAIT
-                # file_name = row[0]
-                # field_name = row[1]
-                # ra = float(row[2])
-                # dec = float(row[3])
-                # mjd = float(row[4])
-                # band = row[5].strip()
-                # exp_time = float(row[6])
-                # mag_lim = None
-                # try:
-                #     mag_lim = float(row[7])
-                # except:
-                #     pass
+            n = row['n']
+            if np.isnan(n):
+                n = None
+
+            n_err = row['n_err']
+            if np.isnan(n_err):
+                n_err = None
+
+            t = Tile(ra, dec, detector, int(healpix_map_nside), position_angle_deg=position_angle)
+
+            obs_tile_insert_data.append((
+                source,
+                detector.id,
+                field_name,
+                ra,
+                dec,
+                "POINT(%s %s)" % (dec, ra - 180.0),  # Dec, RA order due to MySQL convention for lat/lon
+                t.query_polygon_string,
+                float(tile_ebv),
+                n128_id,
+                filter_id,
+                mjd,
+                exp_time,
+                mag_lim,
+                healpix_map_id,
+                position_angle,
+                x0,
+                x0_err,
+                a,
+                a_err,
+                n,
+                n_err
+            ))
 
 
-                # mag_lim = None
-
-
-                # file_name = row[0]
-                # field_name = row[1]
-                # ra = float(row[2])
-                # dec = float(row[3])
-                # mjd = float(row[4])
-                # band = row[5].strip()
-                # exp_time = float(row[6])
-
-                # exp_time = float(row[4])
-                # mjd = float(row[5])
-                # band = row[6].strip()
-
-                # For ANDICAM, the filter is in the filename...
-                # if self.options.tele == "a" and band == "___":
-                #     band = file_name.split(".")[1]
-
-                # # KAIT data format
-                # ra = float(row[2])
-                # dec = float(row[3])
-                # mjd = float(row[4])
-                # band = row[5].strip()
-
-                # exp_time = None
-                # try:
-                #     exp_time = float(row[6])
-                #     if exp_time <= 0.0:
-                #         exp_time = None
-                # except:
-                #     pass
-
-
-                # mag_lim = None
-                # try:
-                #     mag_lim = float(row[7])
-                # except:
-                #     pass
-
-                # Get Band_id
-                band_map = band_mapping[band]
-                band_results = query_db([band_select % band_map])[0][0]
-
-                band_id = band_results[0]
-                band_name = band_results[1]
-                band_F99 = float(band_results[2])
-
-                dec_unit = u.hour
-                if self.options.coord_format == DEG_FORMAT:
-                    dec_unit = u.deg
-                c = coord.SkyCoord(ra, dec, unit=(dec_unit, u.deg))
-
-                n128_index = hp.ang2pix(nside128, 0.5 * np.pi - c.dec.radian, c.ra.radian)  # theta, phi
-                n128_id = N128_dict[n128_index]
-
-                # t = Tile(c.ra.degree, c.dec.degree, detector.deg_width, detector.deg_height, int(healpix_map_nside))
-                t = Tile(c.ra.degree, c.dec.degree, detector, int(healpix_map_nside), position_angle_deg=position_angle)
-
-                t.field_name = field_name
-                t.N128_pixel_id = n128_id
-                t.N128_pixel_index = n128_index
-                t.mwe = ebv[n128_index] * band_F99
-                t.mjd = mjd
-                t.exp_time = exp_time
-                t.mag_lim = mag_lim
-
-                # observed_tiles.append(t)
-                obs_tile_insert_data.append((
-                    file_name,
-                    detector.id,
-                    t.field_name,
-                    t.ra_deg,
-                    t.dec_deg,
-                    "POINT(%s %s)" % (t.dec_deg, t.ra_deg - 180.0),  # Dec, RA order due to MySQL convention for lat/lon
-                    t.query_polygon_string,
-                    str(t.mwe),
-                    t.N128_pixel_id,
-                    band_id,
-                    t.mjd,
-                    t.exp_time,
-                    t.mag_lim,
-                    healpix_map_id,
-                    t.position_angle_deg))
+        # # Iterate over lines of a tile
+        # with open(tile_path, 'r') as csvfile:
+        #     # Read CSV lines
+        #     csvreader = csv.reader(csvfile, delimiter=' ', skipinitialspace=True)
+        #     for row in csvreader:
+        #
+        #         # default PA. Overwrite below if provided
+        #         position_angle = 0.0
+        #
+        #         # Format 0425  - Swope, KAIT
+        #         file_name = row[0]
+        #         field_name = row[1]
+        #         ra = float(row[2])
+        #         dec = float(row[3])
+        #         mjd = float(row[4])
+        #         band = row[5].strip()
+        #         exp_time = float(row[6])
+        #         mag_lim = None
+        #         try:
+        #             mag_lim = float(row[7])
+        #         except:
+        #             pass
+        #
+        #         # # Format 0425  - Thacher, Nickel
+        #         # file_name = row[0]
+        #         # field_name = row[1]
+        #         # ra = float(row[2])
+        #         # dec = float(row[3])
+        #         # exp_time = float(row[4])
+        #         # mjd = float(row[5])
+        #         # band = row[6].strip()
+        #         # mag_lim = None
+        #         # try:
+        #         #     mag_lim = float(row[7])
+        #         # except:
+        #         #     pass
+        #
+        #         # # Format 0425 Treasure Map
+        #         # file_name = row[0]
+        #         # field_name = row[1]
+        #         # ra = float(row[2])
+        #         # dec = float(row[3])
+        #         # mjd = float(row[4])
+        #         # band = row[5].strip()
+        #         # exp_time = float(row[6])
+        #         # mag_lim = float(row[7])
+        #         # position_angle = float(row[8])
+        #
+        #         # # Format 0814 Swope, Nickel, Wise
+        #         # file_name = row[0]
+        #         # field_name = row[0]
+        #         # ra = float(row[1])
+        #         # dec = float(row[2])
+        #         # mjd = float(row[3])
+        #         # band = row[4].strip()
+        #         # exp_time = float(row[5])
+        #         # mag_lim = float(row[6])
+        #
+        #         # # Format 0814 Thacher
+        #         # file_name = row[0]
+        #         # field_name = row[1]
+        #         # ra = float(row[2])
+        #         # dec = float(row[3])
+        #         # mjd = float(row[4])
+        #         # band = row[5].strip()
+        #         # exp_time = float(row[6])
+        #         # mag_lim = float(row[7])
+        #
+        #         # Format 0814 MOSFIRE
+        #         # file_name = row[0]
+        #         # field_name = row[1]
+        #         # ra = float(row[2])
+        #         # dec = float(row[3])
+        #         # mjd = float(row[4])
+        #         # band = row[5].strip()
+        #         # exp_time = float(row[6])
+        #         # mag_lim = None
+        #
+        #         # # Format 0814 LCOGT, KAIT
+        #         # file_name = row[0]
+        #         # field_name = row[1]
+        #         # ra = float(row[2])
+        #         # dec = float(row[3])
+        #         # mjd = float(row[4])
+        #         # band = row[5].strip()
+        #         # exp_time = float(row[6])
+        #         # mag_lim = None
+        #         # try:
+        #         #     mag_lim = float(row[7])
+        #         # except:
+        #         #     pass
+        #
+        #
+        #         # mag_lim = None
+        #
+        #
+        #         # file_name = row[0]
+        #         # field_name = row[1]
+        #         # ra = float(row[2])
+        #         # dec = float(row[3])
+        #         # mjd = float(row[4])
+        #         # band = row[5].strip()
+        #         # exp_time = float(row[6])
+        #
+        #         # exp_time = float(row[4])
+        #         # mjd = float(row[5])
+        #         # band = row[6].strip()
+        #
+        #         # For ANDICAM, the filter is in the filename...
+        #         # if self.options.tele == "a" and band == "___":
+        #         #     band = file_name.split(".")[1]
+        #
+        #         # # KAIT data format
+        #         # ra = float(row[2])
+        #         # dec = float(row[3])
+        #         # mjd = float(row[4])
+        #         # band = row[5].strip()
+        #
+        #         # exp_time = None
+        #         # try:
+        #         #     exp_time = float(row[6])
+        #         #     if exp_time <= 0.0:
+        #         #         exp_time = None
+        #         # except:
+        #         #     pass
+        #
+        #
+        #         # mag_lim = None
+        #         # try:
+        #         #     mag_lim = float(row[7])
+        #         # except:
+        #         #     pass
+        #
+        #         # Get Band_id
+        #         band_map = band_mapping[band]
+        #         band_results = query_db([band_select % band_map])[0][0]
+        #
+        #         band_id = band_results[0]
+        #         band_name = band_results[1]
+        #         band_F99 = float(band_results[2])
+        #
+        #         dec_unit = u.hour
+        #         if self.options.coord_format == DEG_FORMAT:
+        #             dec_unit = u.deg
+        #         c = coord.SkyCoord(ra, dec, unit=(dec_unit, u.deg))
+        #
+        #         n128_index = hp.ang2pix(nside128, 0.5 * np.pi - c.dec.radian, c.ra.radian)  # theta, phi
+        #         n128_id = N128_dict[n128_index]
+        #
+        #         # t = Tile(c.ra.degree, c.dec.degree, detector.deg_width, detector.deg_height, int(healpix_map_nside))
+        #         t = Tile(c.ra.degree, c.dec.degree, detector, int(healpix_map_nside), position_angle_deg=position_angle)
+        #
+        #         t.field_name = field_name
+        #         t.N128_pixel_id = n128_id
+        #         t.N128_pixel_index = n128_index
+        #         t.mwe = ebv[n128_index] * band_F99
+        #         t.mjd = mjd
+        #         t.exp_time = exp_time
+        #         t.mag_lim = mag_lim
+        #
+        #         # observed_tiles.append(t)
+        #         obs_tile_insert_data.append((
+        #             file_name,
+        #             detector.id,
+        #             t.field_name,
+        #             t.ra_deg,
+        #             t.dec_deg,
+        #             "POINT(%s %s)" % (t.dec_deg, t.ra_deg - 180.0),  # Dec, RA order due to MySQL convention for lat/lon
+        #             t.query_polygon_string,
+        #             str(t.mwe),
+        #             t.N128_pixel_id,
+        #             band_id,
+        #             t.mjd,
+        #             t.exp_time,
+        #             t.mag_lim,
+        #             healpix_map_id,
+        #             t.position_angle_deg))
 
         insert_observed_tile = '''
             INSERT INTO
-                ObservedTile (FileName, Detector_id, FieldName, RA, _Dec, Coord, Poly, EBV, N128_SkyPixel_id, Band_id, MJD, Exp_Time, Mag_Lim, HealpixMap_id, PositionAngle)
-            VALUES (%s, %s, %s, %s, %s, ST_PointFromText(%s, 4326), ST_GEOMFROMTEXT(%s, 4326), %s, %s, %s, %s, %s, %s, %s, %s)
+                ObservedTile (Source, Detector_id, FieldName, RA, _Dec, Coord, Poly, EBV, N128_SkyPixel_id, Band_id, 
+                MJD, Exp_Time, Mag_Lim, HealpixMap_id, PositionAngle, x0, x0_err, a, a_err, n, n_err)
+            VALUES (%s, %s, %s, %s, %s, ST_PointFromText(%s, 4326), ST_GEOMFROMTEXT(%s, 4326), %s, %s, %s, %s, %s, %s, 
+            %s, %s, %s, %s, %s, %s, %s, %s)
         '''
 
         print("Inserting %s tiles..." % len(obs_tile_insert_data))
@@ -447,7 +470,7 @@ class Teglon:
         print("Building observed tile-healpix map pixel relation...")
 
         obs_tile_select = '''
-            SELECT FileName, id, Detector_id, FieldName, RA, _Dec, Coord, Poly, EBV, N128_SkyPixel_id, Band_id, MJD, Exp_Time, Mag_Lim, HealpixMap_id, PositionAngle 
+            SELECT `Source`, id, Detector_id, FieldName, RA, _Dec, Coord, Poly, EBV, N128_SkyPixel_id, Band_id, MJD, Exp_Time, Mag_Lim, HealpixMap_id, PositionAngle 
             FROM ObservedTile 
             WHERE Detector_id = %s and HealpixMap_id = %s 
         '''
@@ -471,12 +494,12 @@ class Teglon:
                 t.id = ot_id
 
                 for p in t.enclosed_pixel_indices:
-                    tile_pixel_data.append((t.id, map_pixel_dict[p][0]))
+                    tile_pixel_data.append((t.id, map_pixel_dict[p][0], healpix_map_id))
 
         print("Length of tile_pixel_data: %s" % len(tile_pixel_data))
 
-        tile_pixel_upload_csv = "%s/ObservedTiles/%s_tile_pixel_upload.csv" % \
-                                (formatted_healpix_dir, detector.name.replace("/", "_"))
+        tile_pixel_upload_csv = "%s/%s_tile_pixel_upload.csv" % (formatted_tile_dir,
+                                                                 detector.name.replace("/", "_"))
 
         # Create CSV
         try:
@@ -506,7 +529,7 @@ class Teglon:
                     INTO TABLE ObservedTile_HealpixPixel 
                     FIELDS TERMINATED BY ',' 
                     LINES TERMINATED BY '\n' 
-                    (ObservedTile_id, HealpixPixel_id);"""
+                    (ObservedTile_id, HealpixPixel_id, HealpixMap_id);"""
 
         success = bulk_upload(ot_hp_upload_sql % tile_pixel_upload_csv)
         if not success:

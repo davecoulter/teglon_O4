@@ -17,10 +17,10 @@ from web.src.objects.Tile import *
 
 from web.src.utilities.filesystem_utilties import *
 
-table_keywords = ['file_name', 'detector_name']
-target_table_names = ('field_name', 'ra', 'dec', 'filter', 'mjd', 'exp_time', 'mag_lim', 'position_angle',
+table_keywords = ['input_file_name', 'detector_name']
+target_table_names = ('source', 'field_name', 'ra', 'dec', 'filter', 'mjd', 'exp_time', 'mag_lim', 'position_angle',
                       'x0', 'x0_err', 'a', 'a_err', 'n', 'n_err')
-target_table_row = [['X' * 40], [0.], [0.], ['X' * 40], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.]]
+target_table_row = [['X' * 40], ['X' * 40], [0.], [0.], ['X' * 40], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.]]
 
 utilities_base_dir = "/app/web/src/utilities"
 pickle_output_dir = "%s/pickles/" % utilities_base_dir
@@ -165,15 +165,18 @@ def convert_obs_file_to_escv(gw_id, healpix_dir, tile_file, tele):
 
         if position_angle_in_keys:
             new_row['position_angle'] = row['position_angle']
+        else:
+            new_row['position_angle'] = None
 
-        new_row['x0'] = -1
-        new_row['x0_err'] = -1
-        new_row['a'] = -1
-        new_row['a_err'] = -1
-        new_row['n'] = -1
-        new_row['n_err'] = -1
+        new_row['x0'] = None
+        new_row['x0_err'] = None
+        new_row['a'] = None
+        new_row['a_err'] = None
+        new_row['n'] = None
+        new_row['n_err'] = None
 
         if detect_name in ["SWOPE", "THACHER", "NICKEL", "ANDICAM-CCD", "ANDICAM-IR"]:
+            new_row['source'] = row['file']
             new_row['mag_lim'] = row['x0']
             new_row['x0'] = row['x0']
             new_row['x0_err'] = row['x0_err']
@@ -182,12 +185,13 @@ def convert_obs_file_to_escv(gw_id, healpix_dir, tile_file, tele):
             new_row['n'] = row['n']
             new_row['n_err'] = row['n_err']
         else:
+            new_row['source'] = row['source']
             new_row['mag_lim'] = row['mag_lim']
 
         output_table.add_row(new_row)
 
     comments = OrderedDict()
-    comments["file_name"] = tile_file
+    comments["input_file_name"] = tile_file
     comments["detector_name"] = detect_name
     output_table.meta['comments'] = comments
 
