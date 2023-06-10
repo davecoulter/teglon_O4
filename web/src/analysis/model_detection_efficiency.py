@@ -21,14 +21,10 @@ from astropy.cosmology import z_at_value
 from configparser import RawConfigParser
 
 from scipy.special import erf
-from billiard.pool import Pool
+from multiprocessing import Pool
 # endregion
 
-# Generate all pixel indices
-# cosmo = LambdaCDM(H0=70, Om0=0.3, Ode0=0.7)
 
-
-# GW190814_t_0 = 58709.882824224536  # time of GW190814 merger
 configFile = './Settings.ini'
 config = RawConfigParser()
 config.read(configFile)
@@ -36,9 +32,6 @@ config.read(configFile)
 H0 = config.get('cosmology', 'H0')
 O_M = config.get('cosmology', 'OMEGA_M')
 O_DE = config.get('cosmology', 'OMEGA_DE')
-
-
-
 
 def initial_z(pixel_data):
     cosmo = LambdaCDM(H0=H0, Om0=O_M, Ode0=O_DE)
@@ -74,14 +67,6 @@ pixel_data = (
 )
 """
 def integrate_pixel(pixel_data):
-    # reverse_band_mapping_new = {
-    #     "SDSS g": "sdss_g",
-    #     "SDSS r": "sdss_r",
-    #     "SDSS i": "sdss_i",
-    #     "SDSS u": "sdss_u",
-    #     "Landolt V": "johnson_V",
-    #     "Clear": "Clear"
-    # }
     band_mapping = {
         "sdss_u": "SDSS u",
         "sdss_g": "SDSS g",
@@ -112,6 +97,7 @@ def integrate_pixel(pixel_data):
     lim_mag = pixel_data[7]
     model_func_dict = pixel_data[8]
     delta_mjd = pixel_data[9]
+
 
     f_band = model_func_dict[reverse_band_mapping[band]]
     abs_in_band = f_band(delta_mjd)
@@ -152,14 +138,14 @@ class Teglon:
         parser.add_option('--model_output_dir', default="./web/events/{GWID}/model_detection", type="str",
                           help='Directory for where to output processed models.')
 
-        parser.add_option('--num_cpu', default="6", type="int",
+        parser.add_option('--num_cpu', default="5", type="int",
                           help='Number of CPUs to use for multiprocessing')
 
-        parser.add_option('--model_base_path', default="./web/models/kne", type="str",
+        parser.add_option('--model_base_path', default="./web/models/{MODEL_TYPE}", type="str",
                           help='Path to models to process')
 
         parser.add_option('--model_type', default='kne', type="str",
-                          help="Type of model to process. Values: linear, sgrb, kn")
+                          help="Type of model to process. Values: linear, grb, kne")
 
         parser.add_option('--sub_dir', default="1", type="str",
                           help='Sub directory (for batching)')
@@ -167,21 +153,22 @@ class Teglon:
         parser.add_option('--batch_dir', default="", type="str",
                           help='GRB Model sub sub directory (for batching... lol)')
 
-        parser.add_option('--maxtasksperchild', default="2", type="int",
-                          help='Max Tasks Per Child == how many batches of work for a process to do before recycling')
-
-        parser.add_option('--chunksize', default="551200", type="int",
-                          help='Chunk Size == how many jobs per batch of work')
-
         parser.add_option('--merger_time_MJD', default="58598.346134259256", type="float",
                           help='''Time of the merger in MJD. This is used to compute where on the light curve we are. 
                                   Default to GW190425''')
+
+        parser.add_option('--clobber', action="store_true", default=False,
+                            help='''Remove per event pickles and start with fresh database queries''')
 
         return (parser)
 
     def main(self):
 
+        # region Sanity checks
+        is_error = False
+
         formatted_healpix_dir = self.options.healpix_dir
+        formatted_model_base_input_dir = self.options.model_base_path
         formatted_model_output_dir = self.options.model_output_dir
         if self.options.gw_id == "":
             is_error = True
@@ -190,16 +177,67 @@ class Teglon:
             if "{GWID}" in formatted_healpix_dir:
                 formatted_healpix_dir = formatted_healpix_dir.replace("{GWID}", self.options.gw_id)
 
-
             if "{GWID}" in formatted_model_output_dir:
                 formatted_model_output_dir = formatted_model_output_dir.replace("{GWID}", self.options.gw_id)
 
-        gw_event_pickle_path = "%s/%s" % (formatted_healpix_dir, "pickles")
+        if "{MODEL_TYPE}" in formatted_model_base_input_dir:
+            formatted_model_base_input_dir = formatted_model_base_input_dir.replace("{MODEL_TYPE}", self.options.model_type)
+
+        healpix_map_select = "SELECT id, NSIDE FROM HealpixMap WHERE GWID = '%s' and Filename = '%s'"
+        map_check = query_db([healpix_map_select % (self.options.gw_id, self.options.healpix_file)])[0]
+        healpix_map_id = None
+        healpix_map_nside = None
+        if len(map_check) != 1:
+            is_error = True
+            print("Map does not exist for combination of `%s` and `%s`!" %
+                  (self.options.gw_id, self.options.healpix_file))
+        else:
+            healpix_map_id = int(map_check[0][0])
+            healpix_map_nside = int(map_check[0][1])
+
+
+        if is_error:
+            print("Exiting...")
+            return 1
+        # endregion
+
+        # region Setup Pickles
+        gw_event_pickle_dir = "%s/%s" % (formatted_healpix_dir, "pickles")
+
+        map_pickle_file = "%s/%s" % (gw_event_pickle_dir, "map_pix.pkl")
+        resolved_z_pickle_file = "%s/%s" % (gw_event_pickle_dir, "resolved_z.pkl")
+        detectors_pickle_file = "%s/%s" % (gw_event_pickle_dir, "detectors.pkl")
+        obs_tiles_pickle_file = "%s/%s" % (gw_event_pickle_dir, "obs_tiles.pkl")
+        enclosed_pix_pickle_file = "%s/%s" % (gw_event_pickle_dir, "enc_pix.pkl")
+        if self.options.clobber:
+            if os.path.exists(map_pickle_file):
+                os.remove(map_pickle_file)
+            if os.path.exists(resolved_z_pickle_file):
+                os.remove(resolved_z_pickle_file)
+            if os.path.exists(detectors_pickle_file):
+                os.remove(detectors_pickle_file)
+            if os.path.exists(obs_tiles_pickle_file):
+                os.remove(obs_tiles_pickle_file)
+            if os.path.exists(enclosed_pix_pickle_file):
+                os.remove(enclosed_pix_pickle_file)
 
         utilities_base_dir = "/app/web/src/utilities"
-        pickle_output_dir = "%s/pickles/" % utilities_base_dir
+        global_pickle_dir = "%s/pickles/" % utilities_base_dir
 
-        # pickle_path = "./Pickles.0425"
+        # LOADING NSIDE 128 SKY PIXELS AND EBV INFORMATION
+        print("\nLoading NSIDE 128 pixels...")
+        nside128 = 128
+        N128_dict = None
+        with open('%s/N128_dict.pkl' % global_pickle_dir, 'rb') as handle:
+            N128_dict = pickle.load(handle)
+        del handle
+
+        print("\nLoading existing EBV...")
+        ebv = None
+        with open('%s/ebv.pkl' % global_pickle_dir, 'rb') as handle:
+            ebv = pickle.load(handle)
+        # endregion
+
         prep_start = time.time()
         print("Processes to use: %s" % self.options.num_cpu)
 
@@ -207,11 +245,12 @@ class Teglon:
         t = Time(merger_time, format='mjd')
         print("** Running models for MJD: %s; UTC: %s **" % (merger_time, t.to_datetime(timezone=pytz.utc)))
 
+        # region Load Models from Disk
         model_path = None
-        if self.options.model_type == "sgrb":
-            model_path = "%s/%s/%s" % (self.options.model_base_path, self.options.batch_dir, self.options.sub_dir)
+        if self.options.model_type == "grb":
+            model_path = "%s/%s/%s" % (formatted_model_base_input_dir, self.options.batch_dir, self.options.sub_dir)
         else:
-            model_path = "%s/%s" % (self.options.model_base_path, self.options.sub_dir)
+            model_path = "%s/%s" % (formatted_model_base_input_dir, self.options.sub_dir)
 
         model_files = []
         for file_index, file in enumerate(os.listdir(model_path)):
@@ -234,27 +273,7 @@ class Teglon:
             "ukirt_K": "UKIRT K",
             "Clear": "Clear"
         }
-
         reverse_band_mapping = {v: k for k, v in band_mapping.items()}
-
-        # region Load Serialized Sky Pixels, EBV, and Models from Disk
-        # LOADING NSIDE 128 SKY PIXELS AND EBV INFORMATION
-        print("\nLoading NSIDE 128 pixels...")
-        nside128 = 128
-        N128_dict = None
-        with open('%s/N128_dict.pkl' % pickle_output_dir, 'rb') as handle:
-            N128_dict = pickle.load(handle)
-        del handle
-
-        print("\nLoading existing EBV...")
-        ebv = None
-        with open('%s/ebv.pkl' % pickle_output_dir, 'rb') as handle:
-            ebv = pickle.load(handle)
-
-        available_model_bands = list(band_mapping.keys())
-            # ['sdss_u', 'sdss_g', 'sdss_r', 'sdss_i', 'sdss_z',
-            #                      'ukirt_J', "sdss_u", "johnson_V"]
-
         models = {}
         for index, mf in enumerate(model_files):
             model_table = Table.read(mf, format='ascii.ecsv')
@@ -265,7 +284,7 @@ class Teglon:
                 M = float(model_props[0].split("=")[1])
                 dM = float(model_props[1].split("=")[1])
                 model_key = (M, dM)
-            elif self.options.model_type == 'sgrb':
+            elif self.options.model_type == 'grb':
                 E = float(model_props[1].split("=")[1])
                 n = float(model_props[2].split("=")[1])
                 theta_obs = float(model_props[3].split("=")[1])
@@ -281,39 +300,33 @@ class Teglon:
             base_name = os.path.basename(mf)
             print("Loading `%s`" % base_name)
 
-            mask = model_table['sdss_u'] != np.nan
-            model_time = np.asarray(model_table['time'][mask])
+            available_model_bands = []
+            # Create MaskedTable from Table
+            mt_masked = Table(model_table, masked=True)
 
-            # flux_mask = model_table['sdss_u'] != np.nan
-            # model_time = np.asarray(model_table['time'][flux_mask])
-            # mask = model_table['time'][flux_mask] <= 20.0
+            # Mask out NaN. Generate composite mask from union of all column masks
+            for col in mt_masked.columns:
+                if col not in available_model_bands:
+                    available_model_bands.append(col)
 
+                nan_indices = np.where(np.isnan(mt_masked[col]))
+                mt_masked.mask[nan_indices] = True
 
-            g = np.asarray(model_table['sdss_g'][mask])
-            r = np.asarray(model_table['sdss_r'][mask])
-            i = np.asarray(model_table['sdss_i'][mask])
-            clear = np.asarray(model_table['Clear'][mask])
-            u = np.asarray(model_table['sdss_u'][mask])
-            V = np.asarray(model_table['johnson_V'][mask])
-            B = np.asarray(model_table['johnson_B'][mask])
+            # Temporal mask: mask times > 15 days
+            late_time_indices = np.where(mt_masked['time'] > 15.0)
+            mt_masked.mask[late_time_indices] = True
 
-            f_g = interp1d(model_time, g, fill_value="extrapolate")
-            f_r = interp1d(model_time, r, fill_value="extrapolate")
-            f_i = interp1d(model_time, i, fill_value="extrapolate")
-            f_clear = interp1d(model_time, clear, fill_value="extrapolate")
-            f_u = interp1d(model_time, u, fill_value="extrapolate")
-            f_V = interp1d(model_time, V, fill_value="extrapolate")
-            f_B = interp1d(model_time, B, fill_value="extrapolate")
+            # mask will be set for all cols; just take this one
+            composite_mask = mt_masked['time'].mask
+            model_time = np.asarray(mt_masked['time'][~composite_mask])
 
-            models[model_key] = {
-                'sdss_u': f_u,
-                'sdss_g': f_g,
-                'sdss_r': f_r,
-                'sdss_i': f_i,
-                'johnson_B': f_B,
-                'johnson_V': f_V,
-                'Clear': f_clear
-            }
+            # Spin up interpolation funcs
+            models[model_key] = {}
+            for col in mt_masked.columns:
+                y_vals = np.asarray(mt_masked[col][~composite_mask])
+                light_curve_func = interp1d(model_time, y_vals, fill_value="extrapolate")
+                models[model_key][col] = light_curve_func
+        # endregion
 
         band_dict_by_name = {
             "SDSS u": (1, "SDSS u", 4.239),
@@ -348,7 +361,6 @@ class Teglon:
 
         map_nside = 256  # 0425
         map_pixels = None
-        map_pickle_file = "%s/%s" % (gw_event_pickle_path, "map_pix.pkl")
         if not os.path.exists(map_pickle_file):
             map_pix_select = '''
                 SELECT 
@@ -370,20 +382,16 @@ class Teglon:
                 JOIN 
                     ObservedTile ot on ot.id = ot_hp.ObservedTile_id
                 WHERE
-                    hp.HealpixMap_id = 1 AND
-                    sp.NSIDE = 128 AND 
-                    ot.Detector_id = 1;
+                    hp.HealpixMap_id = %s AND
+                    sp.NSIDE = 128;
             '''
-            map_pixels = query_db([map_pix_select])[0]
+            map_pixels = query_db([map_pix_select % healpix_map_id])[0]
             with open(map_pickle_file, 'wb') as handle:
                 pickle.dump(map_pixels, handle, protocol=pickle.HIGHEST_PROTOCOL)
         else:
             with open(map_pickle_file, 'rb') as handle:
                 map_pixels = pickle.load(handle)
 
-
-        # with open("%s/%s" % (pickle_path, 'map_pix.pkl'), 'rb') as handle:
-        #     map_pixels = pickle.load(handle)
         print("Retrieved %s map pixels..." % len(map_pixels))
 
         # Initialize map pix dict for later access
@@ -446,19 +454,17 @@ class Teglon:
             map_pixel_dict[pixel_index] = p_new
 
         resolved_z = None
-        resolved_z_pickle_file = "%s/%s" % (gw_event_pickle_path, "resolved_z.pkl")
         if not os.path.exists(resolved_z_pickle_file):
-
             print("Starting z-cosmo pool (%s distances)..." % len(initial_integrands))
             it1 = time.time()
-            with Pool(processes=self.options.num_cpu, maxtasksperchild=100) as pool:
-                resolved_z = list(pool.imap_unordered(initial_z, initial_integrands, chunksize=1000))
 
-            # pool1 = mp.Pool(processes=self.options.num_cpu, maxtasksperchild=100)
-            # resolved_z = list(pool1.imap_unordered(initial_z, initial_integrands, chunksize=1000))
-            # pool1.close()
-            # pool1.join()
-            # del pool1
+            # Calculate everything based on num_cpu...
+            chunks = int(len(initial_integrands) // self.options.num_cpu) + 1
+            print("\tNum CPUs: %s" % self.options.num_cpu)
+            print("\t\tTasks per CPU: %s" % chunks)
+
+            with Pool(processes=self.options.num_cpu) as pool:
+                resolved_z = list(pool.imap_unordered(initial_z, initial_integrands, chunksize=chunks))
 
             it2 = time.time()
             print("... finished z-cosmo pool: %s [seconds]" % (it2 - it1))
@@ -477,7 +483,6 @@ class Teglon:
         # Get serialized detectors and tiles
         detector_dictionary = None
         print("\nLoading Detectors...")
-        detectors_pickle_file = "%s/%s" % (gw_event_pickle_path, "detectors.pkl")
         if not os.path.exists(detectors_pickle_file):
             detector_select = '''
                             SELECT id, Name, ST_AsText(Poly) FROM Detector; 
@@ -494,7 +499,6 @@ class Teglon:
 
         print("\nLoading All Tiles...")
         ot_result = None
-        obs_tiles_pickle_file = "%s/%s" % (gw_event_pickle_path, "obs_tiles.pkl")
         if not os.path.exists(obs_tiles_pickle_file):
             observed_tile_select = '''
                 SELECT 
@@ -510,16 +514,47 @@ class Teglon:
                 FROM
                     ObservedTile
                 WHERE 
-                    HealpixMap_id = 1 AND
-                    Detector_id = 1;                         
+                    HealpixMap_id = %s;                      
             '''
-            ot_result = query_db([observed_tile_select])[0]
+            ot_result = query_db([observed_tile_select % healpix_map_id])[0]
 
             with open(obs_tiles_pickle_file, 'wb') as handle:
                 pickle.dump(ot_result, handle, protocol=pickle.HIGHEST_PROTOCOL)
         else:
             with open(obs_tiles_pickle_file, 'rb') as handle:
                 ot_result = pickle.load(handle)
+
+        enc_pix_by_tile_id_dict = None
+        if not os.path.exists(enclosed_pix_pickle_file):
+            enc_pix_select = '''
+                SELECT 
+                    ot.id as Tile_id,
+                    hp.Pixel_Index
+                FROM
+                    ObservedTile_HealpixPixel ot_hp
+                JOIN
+                    HealpixPixel hp on hp.id = ot_hp.HealpixPixel_id
+                JOIN 
+                    ObservedTile ot on ot.id = ot_hp.ObservedTile_id
+                WHERE
+                    ot.HealpixMap_id = %s;
+            '''
+            pix_result = query_db([enc_pix_select % healpix_map_id])[0]
+            enc_pix_by_tile_id_dict = {}
+            for pr in pix_result:
+                tile_id = int(pr[0])
+                pix_index = int(pr[1])
+                if tile_id not in enc_pix_by_tile_id_dict:
+                    enc_pix_by_tile_id_dict[tile_id] = []
+
+                if pix_index not in enc_pix_by_tile_id_dict[tile_id]:
+                    enc_pix_by_tile_id_dict[tile_id].append(pix_index)
+
+            with open(enclosed_pix_pickle_file, 'wb') as handle:
+                pickle.dump(enc_pix_by_tile_id_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        else:
+            with open(enclosed_pix_pickle_file, 'rb') as handle:
+                enc_pix_by_tile_id_dict = pickle.load(handle)
 
         observed_tiles = []
         for ot in ot_result:
@@ -533,6 +568,14 @@ class Teglon:
             mag_lim = float(ot[7])
             band_id = int(ot[5])
 
+            # Hack
+            band_name = band_dict_by_id[band_id][1]
+            if band_name not in reverse_band_mapping:
+                continue
+            model_band_name = reverse_band_mapping[band_name]
+            if model_band_name not in available_model_bands:
+                continue
+
             t = Tile(ra, dec, nside=map_nside, position_angle_deg=pa, tile_id=id,
                      detector=detector_dictionary[detect_id])
 
@@ -543,124 +586,16 @@ class Teglon:
 
             observed_tiles.append(t)
 
-        # for ot in ot_result:
-        #     ot_id = int(ot[0])
-        #     detect_id = int(ot[1])
-        #     fieldname = ot[2]
-        #     ot_ra = float(ot[3])
-        #     ot_dec = float(ot[4])
-        #     band_id = int(ot[7])
-        #
-        #     # Sanity - we currently only have a subset of bands in our models. If this is for
-        #     # a tile in a band that's not modeled, skip it
-        #     band_name = band_dict_by_id[band_id][1]
-        #
-        #     # import pdb; pdb.set_trace()
-        #
-        #     if band_name not in reverse_band_mapping_new:
-        #         continue
-        #     model_band_name = reverse_band_mapping_new[band_name]
-        #     if model_band_name not in available_model_bands:
-        #         continue
-        #
-        #     mjd = float(ot[8])
-        #     mag_lim = float(ot[10])
-        #     pa = float(ot[12])
-        #
-        #     detector = detector_dictionary[detect_id]
-        #
-        #     t = Tile(ot_ra, ot_dec, detector, map_nside, pa, tile_id=ot_id)
-        #     t.field_name = fieldname
-        #     t.mjd = mjd
-        #     t.mag_lim = mag_lim
-        #     t.band_id = band_id
-        #
-        #     observed_tiles.append(t)
-
         print("Observed Tiles: %s" % len(observed_tiles))
-
-        # SWOPE = Detector("SWOPE", 0.49493333333333334, 0.4968666666666667, detector_id=1)
-        # THACHER = Detector("THACHER", 0.34645333333333334, 0.34645333333333334, detector_id=3)
-        # NICKEL = Detector("NICKEL", 0.2093511111111111, 0.2093511111111111, detector_id=4)
-        # KAIT = Detector("KAIT", 0.1133333333, 0.1133333333, detector_id=6)
-        # SINISTRO = Detector("SINISTRO", 0.4416666667, 0.4416666667, detector_id=7)
-
-        # observed_tiles = []
-        #
-        # print("\nLoading KAIT's Observed Tiles...")
-        # with open("%s/%s" % (pickle_path, 'kait_tile.pkl'), 'rb') as handle:
-        #     ot_result = pickle.load(handle)
-        # for ot in ot_result:
-        #     t = Tile(float(ot[3]), float(ot[4]), KAIT.deg_width, KAIT.deg_height, map_nside, tile_id=int(ot[0]))
-        #     t.field_name = ot[2]
-        #     t.mjd = float(ot[8])
-        #     t.mag_lim = float(ot[10])
-        #     t.band_id = int(ot[7])
-        #     observed_tiles.append(t)
-        # print("Loaded %s %s tiles..." % (len(ot_result), KAIT.name))
-        #
-        # print("\nLoading SINISTRO's Observed Tiles...")
-        # with open("%s/%s" % (pickle_path, 'sinistro_tile.pkl'), 'rb') as handle:
-        #     ot_result = pickle.load(handle)
-        # for ot in ot_result:
-        #     t = Tile(float(ot[3]), float(ot[4]), SINISTRO.deg_width, SINISTRO.deg_height, map_nside,
-        #              tile_id=int(ot[0]))
-        #     t.field_name = ot[2]
-        #     t.mjd = float(ot[8])
-        #     t.mag_lim = float(ot[10])
-        #     t.band_id = int(ot[7])
-        #     observed_tiles.append(t)
-        # print("Loaded %s %s tiles..." % (len(ot_result), SINISTRO.name))
-        #
-        # print("\nLoading Thacher's Observed Tiles...")
-        # with open("%s/%s" % (pickle_path, 'thacher_tile.pkl'), 'rb') as handle:
-        #     ot_result = pickle.load(handle)
-        # for ot in ot_result:
-        #     t = Tile(float(ot[3]), float(ot[4]), THACHER.deg_width, THACHER.deg_height, map_nside,
-        #              tile_id=int(ot[0]))
-        #     t.field_name = ot[2]
-        #     t.mjd = float(ot[8])
-        #     t.mag_lim = float(ot[10])
-        #     t.band_id = int(ot[7])
-        #
-        #     observed_tiles.append(t)
-        # print("Loaded %s %s tiles..." % (len(ot_result), THACHER.name))
-        #
-        # print("\nLoading Nickel's Observed Tiles...")
-        # with open("%s/%s" % (pickle_path, 'nickel_tile.pkl'), 'rb') as handle:
-        #     ot_result = pickle.load(handle)
-        # for ot in ot_result:
-        #     t = Tile(float(ot[3]), float(ot[4]), NICKEL.deg_width, NICKEL.deg_height, map_nside,
-        #              tile_id=int(ot[0]))
-        #     t.field_name = ot[2]
-        #     t.mjd = float(ot[8])
-        #     t.mag_lim = float(ot[10])
-        #     t.band_id = int(ot[7])
-        #
-        #     observed_tiles.append(t)
-        # print("Loaded %s %s tiles..." % (len(ot_result), NICKEL.name))
-        #
-        # print("\nLoading Swope's Observed Tiles...")
-        # with open("%s/%s" % (pickle_path, 'swope_tile.pkl'), 'rb') as handle:
-        #     ot_result = pickle.load(handle)
-        # for ot in ot_result:
-        #     t = Tile(float(ot[3]), float(ot[4]), SWOPE.deg_width, SWOPE.deg_height, map_nside,
-        #              tile_id=int(ot[0]))
-        #     t.field_name = ot[2]
-        #     t.mjd = float(ot[8])
-        #     t.mag_lim = float(ot[10])
-        #     t.band_id = int(ot[7])
-        #
-        #     observed_tiles.append(t)
-        # print("Loaded %s %s tiles..." % (len(ot_result), SWOPE.name))
 
         print("\nUpdating pixel `delta_mjds` and `lim_mags`...")
         # region Initialize models
         # For each tile:
-        # 	we want the MJD of observation, and add that to the list of a pixels' MJD collection.
-        # 	we want the limiting mag, add that to the list of a pixel's lim mag collection
+        #   we want the MJD of observation, and add that to the list of a pixels' MJD collection.
+        #   we want the limiting mag, add that to the list of a pixel's lim mag collection
         for t in observed_tiles:
-            pix_indices = t.enclosed_pixel_indices
+            # pix_indices = t.enclosed_pixel_indices
+            pix_indices = enc_pix_by_tile_id_dict[t.id]
 
             for i in pix_indices:
                 # get band from id...
@@ -732,11 +667,6 @@ class Teglon:
 
                         if band not in pix_synopsis.best_integrated_probs[model_param_tuple]:
                             pix_synopsis.best_integrated_probs[model_param_tuple][band] = {mjd: 0.0}
-
-                        # try:
-                        #     pix_synopsis.best_integrated_probs[model_param_tuple][band][mjd] = 0.0
-                        # except:
-                        #     pix_synopsis.best_integrated_probs[model_param_tuple][band] = {mjd: 0.0}
             count += 1
             if count % 1000 == 0:
                 print("Processed: %s" % count)
@@ -777,25 +707,14 @@ class Teglon:
         mp_start = time.time()
 
         integrated_pixels = None
-        # with Pool(processes=self.options.num_cpu, maxtasksperchild=100) as pool:
-        #     resolved_z = list(pool.imap_unordered(initial_z, initial_integrands, chunksize=1000))
-        with Pool(processes=self.options.num_cpu, maxtasksperchild=self.options.maxtasksperchild) as pool:
-            integrated_pixels = list(pool.imap_unordered(integrate_pixel,
-                                 pixels_to_integrate,
-                                 chunksize=self.options.chunksize))
+        # Calculate everything based on num_cpu...
 
-        # pool3 = mp.Pool(processes=self.options.num_cpu, maxtasksperchild=self.options.maxtasksperchild)
-        # integrated_pixels = pool3.imap_unordered(integrate_pixel,
-        #                                          pixels_to_integrate,
-        #                                          chunksize=self.options.chunksize)
+        chunks = int(len(pixels_to_integrate) // self.options.num_cpu // 3) + 1
+        print("\tNum CPUs: %s" % self.options.num_cpu)
+        print("\t\tTasks per CPU: %s" % chunks)
 
-        # print("Starting pool integrate...")
-        # pool_start = time.time()
-        #
-        # pool = mp.Pool(processes=self.options.num_cpu, maxtasksperchild=1)
-        # integrated_pixels = pool.imap_unordered(integrate_pixel,
-        #                                         get_pix_models(map_pixel_dict_new, models),
-        #                                         chunksize=551013)
+        with Pool(processes=self.options.num_cpu, maxtasksperchild=3) as pool:
+            integrated_pixels = list(pool.imap_unordered(integrate_pixel, pixels_to_integrate, chunksize=chunks))
 
         for ip in integrated_pixels:
             pix_key = ip[0]
@@ -807,9 +726,6 @@ class Teglon:
             map_pixel_dict[pix_index].best_integrated_probs[model_param_tuple][band][mjd] = prob
         mp_end = time.time()
 
-        # pool3.close()
-        # pool3.join()
-        # del pool3
         print("Integration time: %s [seconds]" % (mp_end - mp_start))
         # endregion
 
@@ -851,7 +767,8 @@ class Teglon:
 
                     # For each pixel:
                     #   take the compliment from each epoch's integrated probability
-                    #   take the product of these compliments (the product of the individual marginal probabilities of a non-detection)
+                    #   take the product of these compliments (the product of the individual marginal probabilities
+                    #       of a non-detection)
                     #   take the compliment of this join marginal probability to find the prob of at least one detection
 
                     # test = 1.0 - reduce(lambda y, z: y * z,
@@ -923,7 +840,7 @@ class Teglon:
             cols = ['M', 'dM', 'Prob']
             dtype = ['f8', 'f8', 'f8']
             output_filename = 'Detection_Results_Linear_%s.prob' % self.options.sub_dir
-        elif self.options.model_type == 'sgrb':
+        elif self.options.model_type == 'grb':
             cols = ['E', 'n', 'theta_obs', 'Prob']
             dtype = ['f8', 'f8', 'f8', 'f8']
             output_filename = 'Detection_Results_SGRB_%s_%s.prob' % (self.options.batch_dir, self.options.sub_dir)
@@ -937,7 +854,7 @@ class Teglon:
         if self.options.model_type == 'linear':
             for model_param_tuple, prob in net_prob_by_model.items():
                 result_table.add_row([model_param_tuple[0], model_param_tuple[1], prob])
-        elif self.options.model_type == 'sgrb' or self.options.model_type == 'kne':
+        elif self.options.model_type == 'grb' or self.options.model_type == 'kne':
             for model_param_tuple, prob in net_prob_by_model.items():
 
                 try:

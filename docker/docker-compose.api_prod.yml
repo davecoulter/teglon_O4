@@ -4,7 +4,7 @@ services:
         container_name: teglon_api_prod
         platform: linux/amd64
         build: ./teglon_worker
-        image: "ghcr.io/davecoulter/teglon_o4:0.0.1"
+        image: "ghcr.io/davecoulter/teglon_o4:latest"
         mem_limit: ${MEM_LIMIT}
         cpus: ${CPU_LIMIT}
         command: gunicorn --bind 0.0.0.0:5000 web.manage:app --timeout 1200
@@ -73,7 +73,7 @@ services:
     gw_worker:
       container_name: teglon_worker_prod
       build: ./teglon_worker
-      image: "ghcr.io/davecoulter/teglon_o4:0.0.1"
+      image: "ghcr.io/davecoulter/teglon_o4:latest"
       user: nobody
       command: celery -A web.project.tasks worker --loglevel=info
       volumes:
