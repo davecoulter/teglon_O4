@@ -750,7 +750,7 @@ class Teglon:
 
         output_file = "all_telescopes_4D_0.9_%s.svg" % healpix_file
         if not plot_all:
-            output_file = tile_file.replace(".txt", ".svg")
+            output_file = tile_file.split("/")[-1].replace(".txt", ".svg")
 
         output_path = "%s/%s" % (formatted_healpix_dir, output_file)
         fig.savefig(output_path, bbox_inches='tight', format="svg")  # ,dpi=840
@@ -1126,7 +1126,7 @@ class Teglon:
             print("\tLoading NSIDE 128 pixels...")
             with open(pickle_output_dir + 'N128_dict.pkl', 'rb') as handle:
                 N128_dict = pickle.load(handle)
-                del handle
+            del handle
 
             t1 = time.time()
 
