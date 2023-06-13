@@ -594,7 +594,7 @@ print(prob3)
 test = 1
 
 if not is_poster_plot:
-    fig.savefig('./web/events/S190425z/model_detection/0425_KNE_Sensitivity_Swope_ye_%0.3f.png' % ye_thresh,
+    fig.savefig('./web/events/S190425z/model_detection/0425_KNe_Prob2Detect_ye_%0.3f.png' % ye_thresh,
                 bbox_inches='tight')
 # else:
 #     fig.savefig('poster_KNE_Sensitivity.png', bbox_inches='tight', transparent=True)

@@ -2,19 +2,22 @@
 
 start=$SECONDS
 
-START=3
-END=20
+START=51
+END=100
 
 GW_ID='S190425z'
 HEALPIX_FILE='GW190425_PublicationSamples_flattened.fits.gz'
-NUM_CPU=8
-MODEL_TYPE=grb
-BATCH_DIR=onaxis
+NUM_CPU=4
+MODEL_TYPE=linear
+BATCH_DIR=offaxis
+
+#manual_dirs=(10 17 20 27 30 37 40 47 50 57 60 67 70 73)
 
 msg="Processing dirs [${START},${END}]"
 echo "${msg}"
 
 for i in $( seq $START $END ); do
+#for i in ${manual_dirs[@]}; do
 
   msg="Starting job #${i}"
   echo "${msg}"

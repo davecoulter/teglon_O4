@@ -709,11 +709,12 @@ class Teglon:
         integrated_pixels = None
         # Calculate everything based on num_cpu...
 
-        chunks = int(len(pixels_to_integrate) // self.options.num_cpu // 3) + 1
+        max_tasks_per_child = 2
+        chunks = int(len(pixels_to_integrate) // self.options.num_cpu // 5)
         print("\tNum CPUs: %s" % self.options.num_cpu)
         print("\t\tTasks per CPU: %s" % chunks)
 
-        with Pool(processes=self.options.num_cpu, maxtasksperchild=3) as pool:
+        with Pool(processes=self.options.num_cpu, maxtasksperchild=max_tasks_per_child) as pool:
             integrated_pixels = list(pool.imap_unordered(integrate_pixel, pixels_to_integrate, chunksize=chunks))
 
         for ip in integrated_pixels:
