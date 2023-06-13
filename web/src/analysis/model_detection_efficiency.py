@@ -285,9 +285,9 @@ class Teglon:
                 dM = float(model_props[1].split("=")[1])
                 model_key = (M, dM)
             elif self.options.model_type == 'grb':
-                E = float(model_props[1].split("=")[1])
-                n = float(model_props[2].split("=")[1])
-                theta_obs = float(model_props[3].split("=")[1])
+                E = float(model_props[12].split("=")[1].strip())
+                n = float(model_props[6].split("=")[1].strip())
+                theta_obs = float(model_props[8].split("=")[1].strip())
                 model_key = (E, n, theta_obs)
             elif self.options.model_type == 'kne':
                 vej = float(model_props[0].split('=')[-1].strip())
