@@ -6,6 +6,7 @@ from astropy import units as u
 import astropy.coordinates as coord
 from astropy.table import Table
 from astropy.time import Time
+from datetime import datetime
 from astropy.io import ascii
 from dustmaps.sfd import SFDQuery
 
@@ -116,22 +117,22 @@ def convert_obs_file_to_escv(gw_id, healpix_dir, tile_file, tele):
 
     position_angle_in_keys = False
     for key in table_to_convert.keys():
-        if key in ['fieldra', 'r.a.', 'right_ascension', 'RA']:
+        if key in ['fieldra', 'r.a.', 'right_ascension', 'centrera']:
             table_to_convert.rename_column(key, 'ra')
-        if key in ['fielddec', 'declination', 'dec.', 'Dec']:
+        if key in ['fielddec', 'declination', 'dec.', 'centredec']:
             table_to_convert.rename_column(key, 'dec')
-        if key in ['fieldname', 'object', 'name', 'field', 'Object']:
+        if key in ['fieldname', 'object', 'name', 'field', 'gladid']:
             table_to_convert.rename_column(key, 'field_name')
-        if key in ['Exp_Time']:
-            table_to_convert.rename_column(key, 'exp_time')
-        if key in ['p.a.', 'angle', 'P.A.']:
+        # if key in ['exp_time']:
+        #     table_to_convert.rename_column(key, 'exp_time')
+        if key in ['p.a.', 'angle']:
             position_angle_in_keys = True
             table_to_convert.rename_column(key, 'position_angle')
-        if key in ['band_pass', 'band', 'Filter']:
+        if key in ['band_pass', 'band']:
             table_to_convert.rename_column(key, 'filter')
-        if key in ['obs_date', 'date', 'MJD']:
+        if key in ['obs_date', 'date', 'ut']:
             table_to_convert.rename_column(key, 'mjd')
-        if key in ['lim_mag', 'mag']:
+        if key in ['lim_mag', 'mag', 'limitmag']:
             table_to_convert.rename_column(key, 'mag_lim')
 
     output_table = blank_target_table()
@@ -155,18 +156,45 @@ def convert_obs_file_to_escv(gw_id, healpix_dir, tile_file, tele):
         try:
             tm = Time(row['mjd'], format='mjd')
         except:
-            print("\nError! Date field not in MJD format!")
-            print("Exiting...")
-            return 1
+            try:
+                date_str_tokens = row['mjd'].split('T')
+                date = date_str_tokens[0]
+                time = date_str_tokens[-1]
+
+                date_tokens = date.split('/')
+                day = int(date_tokens[0])
+                month = int(date_tokens[1])
+                year = int(date_tokens[2])
+
+                time_tokens = time.split(":")
+                hour = int(time_tokens[0])
+                minute = int(time_tokens[1])
+                second = int(float(time_tokens[2]))
+                d = datetime(year, month, day, hour, minute, second)
+                tm = Time(d, scale='utc')
+            except:
+                print("\nError! Can't parse date field!")
+                print("Exiting...")
+                return 1
+
         new_row['mjd'] = tm.to_value(format="mjd")
 
-        new_row['filter'] = band_mapping[row['filter']]
-        new_row['exp_time'] = row['exp_time']
+        if 'filter' in row:
+            new_row['filter'] = band_mapping[row['filter']]
+        elif 'filter' not in row and detect_name == 'KAIT':
+            new_row['filter'] = 'Clear'
+        else:
+            raise Exception("No filter information!")
+
+        if 'exp_time' in row:
+            new_row['exp_time'] = row['exp_time']
+        else:
+            new_row['exp_time'] = 0.0
 
         if position_angle_in_keys:
             new_row['position_angle'] = row['position_angle']
         else:
-            new_row['position_angle'] = None
+            new_row['position_angle'] = 0.0
 
         new_row['x0'] = None
         new_row['x0_err'] = None
@@ -184,6 +212,9 @@ def convert_obs_file_to_escv(gw_id, healpix_dir, tile_file, tele):
             new_row['a_err'] = row['a_err']
             new_row['n'] = row['n']
             new_row['n_err'] = row['n_err']
+        elif detect_name == "KAIT":
+            new_row['source'] = 'weikang_email'
+            new_row['mag_lim'] = row['mag_lim']
         else:
             new_row['source'] = row['source']
             new_row['mag_lim'] = row['mag_lim']
@@ -210,6 +241,8 @@ if __name__ == "__main__":
     parser.add_argument('--tele', default="", type=str,
                         help='''Telescope name for the telescope to extract files for. Must be a name known 
                         in the Teglon db.''')
+    parser.add_argument('--coord_format', default="deg", type=str, help='''What format the sky coordinates are in. 
+                        Available: "hour" or "deg". Default: "hour".''')
 
     args = parser.parse_args()
     convert_obs_file_to_escv(**vars(args))
