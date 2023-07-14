@@ -68,7 +68,7 @@ E_n = OrderedDict()
 E_prob = OrderedDict()
 all_probs = []
 # for i in range(10):
-for i in range(20):
+for i in range(27):
     sub_dir = i+1
 
     results_table = Table.read("./web/events/%s/model_detection/Detection_Results_SGRB_%s_%s.prob" %
@@ -83,13 +83,17 @@ for i in range(20):
     # E0 in units of 1e50 ergs... Convert to FOE with additional scaling to E_iso
     E_result = np.asarray(list(results_table['E'])) * additional_E_iso_scale / 10.0
     n_result = list(results_table['n'])
-
-    all_n += n_result
     prob_result = list(results_table['Prob'])
 
-    all_probs += prob_result
+    # all_n += n_result
+    # all_probs += prob_result
 
     for j, E in enumerate(E_result):
+
+        # if E > 10.0:
+        #     print("Skip %s" % E)
+        #     continue
+
         if E not in E_n:
             E_n[E] = []
         if E not in E_prob:
@@ -97,18 +101,23 @@ for i in range(20):
         if E not in E_keys:
             E_keys.append(E)
 
-        E_n[E].append(n_result[j])
-        E_prob[E].append(prob_result[j])
+        # if n_result[j] <= 1.0:
+        if True:
+            all_n.append(n_result[j])
+            all_probs.append(prob_result[j])
+
+            E_n[E].append(n_result[j])
+            E_prob[E].append(prob_result[j])
 
 
-        model_sep = np.sqrt((sss17a_sgrb_props[0] - E_result[j])**2 +
-                             (sss17a_sgrb_props[1] - n_result[j])**2)
-        if model_sep < closest_sep:
-            closest_sep = model_sep
-            closest_model_props = [E_result[j]*10, n_result[j]]
-            closest_sub_dir = sub_dir
+            model_sep = np.sqrt((sss17a_sgrb_props[0] - E_result[j])**2 +
+                                 (sss17a_sgrb_props[1] - n_result[j])**2)
+            if model_sep < closest_sep:
+                closest_sep = model_sep
+                closest_model_props = [E_result[j]*10, n_result[j]]
+                closest_sub_dir = sub_dir
 
-
+print(len(all_probs))
 print("%s closest model" % grb_axis)
 print(closest_sep)
 print(closest_model_props)
@@ -134,12 +143,24 @@ for E in Sorted_E:
     Sorted_E_n[E] = n_rows[E]
     Sorted_E_prob[E] = prob_rows[E]
 
+# print(min(all_n))
+# print(max(all_n))
+# print(min(E_keys))
+# print(max(E_keys))
 
 
 # From the data, get a log-spaced sampling of the ranges
 arr_len = 100
 model_E_input = np.logspace(np.min(np.log10(E_keys)) + 0.000001, np.max(np.log10(E_keys)) - 0.000001, arr_len)
+# model_E_input = np.logspace(np.min(np.log10(E_keys)), np.max(np.log10(E_keys)), arr_len)
 model_n_input = np.logspace(np.min(np.log10(all_n)), np.max(np.log10(all_n)), arr_len)
+
+# model_E_input = np.logspace(np.min(np.log10(1.1e-6)), np.max(np.log10(5.0e1)), arr_len) #np.min(np.log10(1.0e-2)), np.max(np.log10(5.0e1))
+# model_n_input = np.logspace(np.min(np.log10(all_n)), np.max(np.log10(all_n)), arr_len) #np.min(np.log10(1.0e-6) 4.0e0
+
+# model_E_input = np.logspace(np.log10(10.0e-3), np.log10(80.0), arr_len)
+# model_n_input = np.logspace(np.log10(10.0e-6), np.max(np.log10(8.0)), arr_len)
+
 # model_n_input = np.logspace(np.log10(1.59e-6), np.max(np.log10(all_n)), 100) # HACK for latest 20 deg SGRB models from Charlie
 
 # Interpolate rows
@@ -156,7 +177,7 @@ for E in Sorted_E:
 
 
     p = prob_rows[E]
-    test_f = interp1d(n, p, kind="slinear")
+    test_f = interp1d(n, p, kind="slinear") # , fill_value="extrapolate"
     Interp_E_prob[E] = test_f(model_n_input)
 
 # # Stand-alone interpolate columns
@@ -237,15 +258,30 @@ print("\n\nDone with interp\n\n")
 # min_prob = np.min(all_probs)
 # max_prob = np.max(all_probs)
 # norm = colors.Normalize(min_prob, max_prob)
+
+min_prob_orig = np.min(all_probs)
+max_prob_orig = np.max(all_probs)
+print("Min Orig Prob: %s" % min_prob_orig)
+print("Max Orig Prob: %s" % max_prob_orig)
+
 min_prob = np.min(z_new)
 max_prob = np.max(z_new)
+print("Min Interp Prob: %s" % min_prob)
+print("Max Interp Prob: %s" % max_prob)
+
+# raise Exception("Stop!")
+
+min_prob = min_prob_orig
+max_prob = max_prob_orig
 # norm = colors.Normalize(min_prob, max_prob)
 
 # 0814
 # norm = colors.Normalize(0.0, 0.95)
 
 # 0425
-norm = colors.Normalize(min_prob, max_prob)
+# norm = colors.Normalize(min_prob, max_prob)
+norm = colors.LogNorm(min_prob, max_prob)
+# norm = colors.LogNorm(min_prob_orig, max_prob_orig)
 
 fig = plt.figure(figsize=(10, 10), dpi=600)
 ax = fig.add_subplot(111)
@@ -284,22 +320,25 @@ ax = fig.add_subplot(111)
 
 
 print("plotting...")
-# # By Column
+# By Column
 # for i, n in enumerate(model_n_input):
 #     n_probs = Interp_n_prob[n]
 #     for j, prob in enumerate(n_probs):
 #         clr = plt.cm.viridis(norm(prob))
 #         ax.plot(n, model_E_input[j], 's', color=clr, markeredgecolor=clr, markersize=17.5)
 
-# for mt in model_tuples:
-#     clr = plt.cm.viridis(norm(mt[2]))
-#     ax.plot(mt[0], mt[1], 's', color=clr, markeredgecolor=clr, markersize=17.5)
+for mt in model_tuples:
+    clr = plt.cm.viridis(norm(mt[2]))
+    ax.plot(mt[0], mt[1], 's', color=clr, markeredgecolor=clr, markersize=15)
 
 # DATA GRID IN LINEAR SPACE (PLOT AXES WILL BE LOG SCALED)
 xx, yy = np.meshgrid(model_n_input, model_E_input)
 test = ndimage.gaussian_filter(z_new, sigma=1.0, order=0)
 
-CS_filled = ax.contourf(xx, yy, test, cmap=plt.cm.viridis, levels=np.linspace(0.0, max_prob, 200))
+# CS_filled = ax.contourf(xx, yy, test, cmap=plt.cm.viridis, levels=np.linspace(0, max_prob, 200))
+# CS_filled = ax.contourf(xx, yy, test, cmap=plt.cm.viridis, levels=np.linspace(min_prob, max_prob, 200))
+# CS_filled = ax.contourf(xx, yy, test, cmap=plt.cm.viridis, levels=np.logspace(np.log10(min_prob), np.log10(max_prob), 200))
+
 
 # 0814
 # CS_lines50 = ax.contour(xx, yy, test, colors="red", levels=[0.5], linewidths=2.0)
@@ -312,14 +351,14 @@ CS_filled = ax.contourf(xx, yy, test, cmap=plt.cm.viridis, levels=np.linspace(0.
 # plt.setp(CS_lines90.collections, path_effects=[path_effects.withStroke(linewidth=2.5, foreground='black')])
 
 # 0425
-CS_lines10 = ax.contour(xx, yy, test, colors="red", levels=[0.10], linewidths=2.0)
-plt.setp(CS_lines10.collections, path_effects=[path_effects.withStroke(linewidth=2.5, foreground='black')])
-
-CS_lines20 = ax.contour(xx, yy, test, colors="red", levels=[0.20], linewidths=2.0)
-plt.setp(CS_lines20.collections, path_effects=[path_effects.withStroke(linewidth=2.5, foreground='black')])
-
-CS_lines30 = ax.contour(xx, yy, test, colors="red", levels=[0.30], linewidths=2.0)
-plt.setp(CS_lines30.collections, path_effects=[path_effects.withStroke(linewidth=2.5, foreground='black')])
+# CS_lines10 = ax.contour(xx, yy, test, colors="red", levels=[0.10], linewidths=2.0)
+# plt.setp(CS_lines10.collections, path_effects=[path_effects.withStroke(linewidth=2.5, foreground='black')])
+#
+# CS_lines20 = ax.contour(xx, yy, test, colors="red", levels=[0.20], linewidths=2.0)
+# plt.setp(CS_lines20.collections, path_effects=[path_effects.withStroke(linewidth=2.5, foreground='black')])
+#
+# CS_lines30 = ax.contour(xx, yy, test, colors="red", levels=[0.30], linewidths=2.0)
+# plt.setp(CS_lines30.collections, path_effects=[path_effects.withStroke(linewidth=2.5, foreground='black')])
 
 
 if grb_axis == "onaxis":
@@ -364,8 +403,9 @@ if grb_axis == "onaxis":
     plt.setp(clbls90, path_effects=[path_effects.withStroke(linewidth=1.0, foreground='black')], zorder=9900)
 
     if not is_poster_plot:
-        ax.text(2.0e-4, 2e-3, r'$\mathrm{\theta_{obs}=0\degree}$', fontsize=32, color="white",
-                path_effects=[path_effects.withStroke(linewidth=2.0, foreground='black')], zorder=9999)
+        pass
+        # ax.text(2.0e-4, 2e-3, r'$\mathrm{\theta_{obs}=0\degree}$', fontsize=32, color="white",
+        #         path_effects=[path_effects.withStroke(linewidth=2.0, foreground='black')], zorder=9999)
 
 elif grb_axis == "offaxis":
 
@@ -426,17 +466,17 @@ elif grb_axis == "offaxis":
     # ax.text(1e-4, 5e-1, "90%", fontsize=24, color='red', rotation=-45)  # rotation is counter-clockwise
 
     # 0425
-    clbls10 = ax.clabel(CS_lines10, inline=True, inline_spacing=-175, fontsize=24, fmt=fmt_dict)  # inline_spacing=130,
-    clbls20 = ax.clabel(CS_lines20, inline=True, inline_spacing=-173, fontsize=24, fmt=fmt_dict)  # inline_spacing=130,
-    clbls30 = ax.clabel(CS_lines30, inline=True, inline_spacing=-155, fontsize=24, fmt=fmt_dict)  # inline_spacing=130,
+    # clbls10 = ax.clabel(CS_lines10, inline=True, inline_spacing=-175, fontsize=24, fmt=fmt_dict)  # inline_spacing=130,
+    # clbls20 = ax.clabel(CS_lines20, inline=True, inline_spacing=-173, fontsize=24, fmt=fmt_dict)  # inline_spacing=130,
+    # clbls30 = ax.clabel(CS_lines30, inline=True, inline_spacing=-155, fontsize=24, fmt=fmt_dict)  # inline_spacing=130,
     # for c in clbls90:
     #     c.set_rotation(20)
-    plt.setp(clbls10, path_effects=[path_effects.withStroke(linewidth=1.0, foreground='black')], zorder=9900)
-    plt.setp(clbls20, path_effects=[path_effects.withStroke(linewidth=1.0, foreground='black')], zorder=9900)
-    plt.setp(clbls30, path_effects=[path_effects.withStroke(linewidth=1.0, foreground='black')], zorder=9900)
+    # plt.setp(clbls10, path_effects=[path_effects.withStroke(linewidth=1.0, foreground='black')], zorder=9900)
+    # plt.setp(clbls20, path_effects=[path_effects.withStroke(linewidth=1.0, foreground='black')], zorder=9900)
+    # plt.setp(clbls30, path_effects=[path_effects.withStroke(linewidth=1.0, foreground='black')], zorder=9900)
 
-    ax.text(2.0e-4, 2e-3, r'$\mathrm{\theta_{obs}=17\degree}$', fontsize=32, color="white",
-        path_effects=[path_effects.withStroke(linewidth=2.0, foreground='black')], zorder=9999)
+    # ax.text(2.0e-4, 2e-3, r'$\mathrm{\theta_{obs}=17\degree}$', fontsize=32, color="white",
+    #     path_effects=[path_effects.withStroke(linewidth=2.0, foreground='black')], zorder=9999)
 
     # ax.annotate(r'$\mathrm{\theta_{obs}=17\degree}$', xy=(3.0e-5, 2e-3), xycoords="data", fontsize=40, color='white')
 
@@ -572,7 +612,8 @@ print(grb_axis)
 print(min_prob, max_prob)
 
 # 0425
-tks = np.linspace(min_prob, max_prob, 5)
+# tks = np.linspace(min_prob, max_prob, 5)
+tks = np.logspace(np.log10(min_prob), np.log10(max_prob), 5)
 
 # 0814
 # tks = np.asarray([0, 0.25, 0.5, 0.75, 0.95])
@@ -591,7 +632,7 @@ tks = np.linspace(min_prob, max_prob, 5)
 # tks_strings_off_axis = ["0%", "25%", "50%", "75%", "95%"]
 # 0425
 # tks_strings_off_axis = ["%0.3f" % t for t in tks]
-tks_strings_off_axis = ["%0.1f%%" % (t*100) for t in tks]
+tks_strings_off_axis = ["%0.1e%%" % (t*100) for t in tks]
 # # 0814
 # tks_strings_on_axis = ["0%", "25%", "50%", "75%", "95%"]
 
@@ -620,8 +661,12 @@ ax.margins(x=0, y=0)
 ax.tick_params(axis='both', which='major', labelsize=24, length=12.0, width=2)
 ax.tick_params(axis='both', which='minor', labelsize=24, length=8.0, width=2)
 
-ax.set_xlim([np.min(all_n), np.max(all_n)])
-ax.set_ylim([np.min(E_keys), np.max(E_keys)])
+
+# model_E_input2 = np.logspace(np.log10(1.0e-3), np.log10(10.0), arr_len)
+# model_n_input2 = np.logspace(np.log10(1.0e-6), np.log10(1.0), arr_len)
+# ax.set_xlim([1.0e-6, 1.0])
+# ax.set_ylim([5.0e-2, 10.0])
+# ax.set_ylim(1e-4, 1000)
 
 if not is_poster_plot:
     plt.xlabel(r'n $\mathrm{\left(cm^{-3}\right)}$',fontsize=32)

@@ -156,7 +156,7 @@ ax.invert_yaxis()
 # test = ndimage.gaussian_filter(z_new, sigma=1.0, order=0)
 test = z_new
 # ax.contourf(xx, yy, z_new, levels=np.linspace(0.0, max_prob, 200), cmap=plt.cm.viridis)
-ax.contourf(xx, yy, test, levels=np.linspace(0.0, max_prob, 200), cmap=plt.cm.viridis)
+ax.contourf(xx, yy, test, levels=np.linspace(0.0, max_prob, 200), cmap=plt.cm.inferno)
 
 # CS = ax.contour(xx, yy, z_new, levels=[0.0, 0.10, 0.30, 0.5, 0.7, 0.9, max_prob], colors="red")
 #

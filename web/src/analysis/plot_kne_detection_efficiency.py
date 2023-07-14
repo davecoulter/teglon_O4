@@ -49,7 +49,7 @@ G_CGS = c.G.cgs.value
 R_NS_CGS = 20e5  # NS radius cm == 20 km
 
 is_log = False
-blue_kn = False  # else, red_kn
+blue_kn = True  # else, red_kn
 is_poster_plot = False
 
 is_Ye_0_05 = False
@@ -268,10 +268,10 @@ if not is_poster_plot:
         (4.1e-1, 1e-2),  # 1e51
         (2.2e-1, 1.6e-1)]  # 1e52
 
-    ke_lines = ax.contour(grid_vej, grid_mej, grid_Mass_KE, levels=ke_mass_lvls, colors='black',
+    ke_lines = ax.contour(grid_vej, grid_mej, grid_Mass_KE, levels=ke_mass_lvls, colors='white',
                           locator=ticker.LogLocator(), zorder=8888)
-    # plt.setp(ke_lines.collections, path_effects=[path_effects.withStroke(linewidth=2.0, foreground='white')])
-    plt.setp(ke_lines.collections, path_effects=[path_effects.withStroke(linewidth=3.0, foreground='white')])
+    plt.setp(ke_lines.collections, path_effects=[path_effects.withStroke(linewidth=2.0, foreground='black')])
+    # plt.setp(ke_lines.collections, path_effects=[path_effects.withStroke(linewidth=3.0, foreground='white')])
 
     ke_fmt_dict = {
         1e49: r"$10^{49}$ ergs",
@@ -284,10 +284,10 @@ if not is_poster_plot:
     # KNe label = 18 font; path effect linewidth = 1.0
     ke_clbls = ax.clabel(ke_lines, inline=True, fontsize=24, fmt=ke_fmt_dict, inline_spacing=10.0,
                          manual=manual_locations)
-    # plt.setp(ke_clbls, path_effects=[path_effects.withStroke(linewidth=0.5, foreground='white')], zorder=8888)
-    plt.setp(ke_clbls, path_effects=[path_effects.withStroke(linewidth=2.5, foreground='white')], zorder=9990)
+    plt.setp(ke_clbls, path_effects=[path_effects.withStroke(linewidth=0.75, foreground='black')], zorder=8888)
+    # plt.setp(ke_clbls, path_effects=[path_effects.withStroke(linewidth=0.5, foreground='white')], zorder=9990)
 
-cnt = ax.contourf(grid_vej, grid_mej, grid_prob, cmap=plt.cm.viridis,
+cnt = ax.contourf(grid_vej, grid_mej, grid_prob, cmap=plt.cm.inferno,
                   levels=np.logspace(np.log10(min_prob), np.log10(max_prob), 1000), zorder=8800)  # , rasterized=True
 # This corrects the aliasing for eps plots
 for c in cnt.collections:
@@ -298,7 +298,7 @@ if blue_kn:
     # test = ndimage.gaussian_filter(grid_prob, sigma=3.0, order=0)
     test = grid_prob
 
-    CS_lines = ax.contour(grid_vej, grid_mej, test, colors="red", linewidths=2.0,
+    CS_lines = ax.contour(grid_vej, grid_mej, test, colors="mediumturquoise", linewidths=2.0,
                           levels=[0.0, 0.01, 0.1, 0.25], zorder=9900)  # , 0.35
     # CS_lines = ax.contour(grid_vej, grid_mej, test, colors="red", linewidths=2.0,
     #                       levels=[0.0, 0.01, 0.1, 0.25, 0.3, 0.4, 0.5, max_prob], zorder=9900)  # , 0.35
@@ -332,7 +332,7 @@ else:
     test = ndimage.gaussian_filter(grid_prob, sigma=2.8, order=0)
 
     # grid_prob
-    CS_lines = ax.contour(grid_vej, grid_mej, test, colors="red", linewidths=2.0,  # zorder=9900)
+    CS_lines = ax.contour(grid_vej, grid_mej, test, colors="mediumturquoise", linewidths=2.0,  # zorder=9900)
                           # levels=[0.0, 1e-11, 1e-10, 1e-9, 1e-8, 1e-7, 1e-6], zorder=9900)
 
                           # For 0814
@@ -374,9 +374,9 @@ else:
 
 sm = None
 if blue_kn:
-    sm = plt.cm.ScalarMappable(norm=blue_norm, cmap=plt.cm.viridis)
+    sm = plt.cm.ScalarMappable(norm=blue_norm, cmap=plt.cm.inferno)
 else:
-    sm = plt.cm.ScalarMappable(norm=red_norm, cmap=plt.cm.viridis)
+    sm = plt.cm.ScalarMappable(norm=red_norm, cmap=plt.cm.inferno)
 sm.set_array([])  # can be an empty list
 
 cb = fig.colorbar(sm, ax=ax, orientation='vertical', fraction=0.05, pad=0.02, alpha=0.80)
@@ -476,17 +476,19 @@ if not is_poster_plot:
 
 if blue_kn:
     # SSS17a - Blue KN
-    ax.errorbar(0.25, 0.025, fmt="*", mfc="deepskyblue", mec="black", ms=24.0, zorder=9999, mew=1.5)
+    #deepskyblue
+    ax.errorbar(0.25, 0.025, fmt="*", mfc="black", mec="black", ms=24.0, zorder=9999, mew=1.5)
     print("Prob of blue KN: %s" % griddata(points, values, (0.25, 0.025)))
 
     # Test from Charlie
     # ax.errorbar(0.15, 0.06, fmt="*", mfc="deepskyblue", mec="black", ms=24.0, zorder=9999, mew=1.5)
 
     if not is_poster_plot:
-        ax.text(0.23, 0.0135, "AT 2017gfo-like\nBlue Component", fontsize=20, color="white",
-                # ax.text(0.23, 0.0135, "SSS17a-like\nBlue Component", fontsize=20, color="white",
-                ha="center", zorder=9999,
-                path_effects=[path_effects.withStroke(linewidth=2.0, foreground='black')])
+        pass
+        # ax.text(0.23, 0.0135, "AT 2017gfo-like\nBlue Component", fontsize=20, color="black",
+        #         # ax.text(0.23, 0.0135, "SSS17a-like\nBlue Component", fontsize=20, color="white",
+        #         ha="center", zorder=9999,
+        #         path_effects=[path_effects.withStroke(linewidth=1.0, foreground='black')])
     else:
         ax.text(0.23, 0.0135, "Neutron Star\nMerger", fontsize=20, color="white",
                 ha="center", zorder=9999,
@@ -499,7 +501,7 @@ else:
     # ej ≈ 0.03 - 0.08
     # M ☉ for v ej ≈ 0.1-0.3c.
 
-    e = ax.errorbar(0.2, 0.055, xerr=0.1, yerr=0.025, fmt="^", mfc="red", mec="black", ecolor="red", elinewidth=2.0,
+    e = ax.errorbar(0.2, 0.055, xerr=0.1, yerr=0.025, fmt="^", mfc="black", mec="white", ecolor="white", elinewidth=1.0,
                     capsize=5.0, ms=18.0, zorder=9999, mew=1.5)  #
 
     e[1][0].set_path_effects([path_effects.Stroke(linewidth=5.0, foreground="black"), path_effects.Normal()])
@@ -510,15 +512,15 @@ else:
     e[2][0].set_path_effects([path_effects.Stroke(linewidth=5.0, foreground="black"), path_effects.Normal()])
     e[2][1].set_path_effects([path_effects.Stroke(linewidth=5.0, foreground="black"), path_effects.Normal()])
 
-    ax.text(0.31, 0.023, "GRB 130603B\nAfterglow Excess", fontsize=20, color="white",
-            ha="center", zorder=9999, path_effects=[path_effects.withStroke(linewidth=2.0, foreground='black')])
+    # ax.text(0.31, 0.023, "GRB 130603B\nAfterglow Excess", fontsize=20, color="white",
+    #         ha="center", zorder=9999, path_effects=[path_effects.withStroke(linewidth=2.0, foreground='black')])
 
     # SSS17a - Red KN
     # From Charlie's SSS17a paper:
     # A good description to the panchromatic data is obtained by summing a red kilonova component with
     # Mej = 0.035 ± 0.15 M⊙, vk = 0.15 ± 0.03 c, log(Xlan) = −2.0 ± 0.5,
-    e = ax.errorbar(0.15, 0.035, xerr=0.03, yerr=0.015, fmt="*", mfc="red", mec="black", ms=24.0, zorder=9999, mew=1.5,
-                    ecolor="red", elinewidth=2.0, capsize=5.0)
+    e = ax.errorbar(0.15, 0.035, xerr=0.03, yerr=0.015, fmt="*", mfc="black", mec="white", ms=24.0, zorder=9999, mew=1.5,
+                    ecolor="white", elinewidth=1.0, capsize=5.0)
     print("Prob of red KN: %s" % griddata(points, values, (0.15, 0.035)))
 
     e[1][0].set_path_effects([path_effects.Stroke(linewidth=5.0, foreground="black"), path_effects.Normal()])
@@ -529,8 +531,8 @@ else:
     e[2][0].set_path_effects([path_effects.Stroke(linewidth=5.0, foreground="black"), path_effects.Normal()])
     e[2][1].set_path_effects([path_effects.Stroke(linewidth=5.0, foreground="black"), path_effects.Normal()])
 
-    ax.text(0.17, 0.012, "AT 2017gfo-like\nRed Component", fontsize=20, ha="center", zorder=9999, color="white",
-            path_effects=[path_effects.withStroke(linewidth=2.0, foreground='black')])
+    # ax.text(0.17, 0.012, "AT 2017gfo-like\nRed Component", fontsize=20, ha="center", zorder=9999, color="white",
+    #         path_effects=[path_effects.withStroke(linewidth=2.0, foreground='black')])
     # ax.text(0.17, 0.012, "SSS17a-like\nRed Component", fontsize=20, ha="center", zorder=9999, color="white",
     #         path_effects = [path_effects.withStroke(linewidth=2.0, foreground='black')])
     # path_effects = [path_effects.withStroke(linewidth=1.25, foreground='white')]
