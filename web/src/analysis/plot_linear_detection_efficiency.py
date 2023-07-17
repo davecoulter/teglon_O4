@@ -53,14 +53,8 @@ test_prob_list = []
 
 for i in range(100):
     sub_dir = i+1
-    results_table = Table.read("./web/events/S190425z/model_detection/Detection_Results_Linear_%s.prob" % sub_dir,
+    results_table = Table.read("./web/events/S190425z/model_detection/linear/Detection_Results_Linear_%s.prob" % sub_dir,
                                format='ascii.ecsv')
-    # results_table = Table.read("../Events/S190814bv/ModelDetection/Detection_Results_Linear_%s.prob" % sub_dir,
-    #                            format='ascii.ecsv')
-    # results_table = Table.read("../Events/S190425z/ModelDetection/Detection_Results_Linear_%s.prob" % sub_dir,
-    #                            format='ascii.ecsv')
-    # results_table = Table.read("../Events/S200213t/ModelDetection/Detection_Results_Linear_%s.prob" % sub_dir,
-    #                            format='ascii.ecsv')
 
     M_list = list(results_table['M'])
     dm_list = list(results_table['dM'])
@@ -160,8 +154,8 @@ ax.contourf(xx, yy, test, levels=np.linspace(0.0, max_prob, 200), cmap=plt.cm.in
 
 # CS = ax.contour(xx, yy, z_new, levels=[0.0, 0.10, 0.30, 0.5, 0.7, 0.9, max_prob], colors="red")
 #
-CS = ax.contour(xx, yy, test, levels=[0.0, 0.15, 0.25, 0.35, max_prob], linewidths=2.0, colors="red")
-plt.setp(CS.collections, path_effects=[path_effects.withStroke(linewidth=2.5, foreground='black')])
+CS = ax.contour(xx, yy, test, levels=[0.0, 0.15, 0.25, 0.35, max_prob], linewidths=2.0, colors="mediumturquoise")
+plt.setp(CS.collections, path_effects=[path_effects.withStroke(linewidth=3.0, foreground='black')])
 
 # For Zoom out
 # manual_locations = [(10.0, -17.0), (7.0, -20.0), (5.0, -21.0), (3.0, -21), (0.0, -22.0)]
@@ -175,7 +169,7 @@ fmt_dict = {
 }
 # manual=manual_locations
 clbls = ax.clabel(CS, inline=True, fontsize=24, fmt=fmt_dict, inline_spacing=-100)
-plt.setp(clbls, path_effects=[path_effects.withStroke(linewidth=1.0, foreground='black')], zorder=9900)
+plt.setp(clbls, path_effects=[path_effects.withStroke(linewidth=3.0, foreground='black')], zorder=9900)
 
 for c in clbls:
     c.set_rotation(40)
@@ -244,17 +238,33 @@ for c in clbls:
 #     ax.plot(xxx,yyy,'r', linewidth=3.0) #zorder=9999,
 
 # These transients are only for the zoom in
-transient_colors = {
-    "Ia":"orangered",
-    "Ia-91bg":"darkblue",
-    "II":"forestgreen",
-    "Ia-91T":"black",
-    "SLSN-I":"mediumturquoise",
-    "IIb":"orange",
-    "Ic":"grey",
-    "Ib":"orchid",
-    "IIn":"cornflowerblue"
-}
+# transient_colors = OrderedDict([
+#     ("Ia", "red"),
+#     ("Ia-91bg", "darkblue"),
+#     ("II", "mediumspringgreen"),
+#     ("Ia-91T", "mediumslateblue"),
+#     ("SLSN-I", "mediumturquoise"),
+#     ("IIb", "orange"),
+#     ("Ic", "grey"),
+#     ("Ib", "orchid"),
+#     ("IIn", "dodgerblue")]
+# )
+
+transient_types = [
+    "Ia",
+    "Ia-91bg",
+    "II",
+    "SLSN-I",
+    "IIb",
+    "Ic",
+    "Ib",
+    "IIn",
+    "Ia-91T"
+]
+
+transient_colors_id =OrderedDict([(val, i) for (i, val) in enumerate(transient_types)])
+cmap = plt.get_cmap('Spectral_r')
+transient_color_map = cmap(np.linspace(0, 1, len(transient_types)))
 
 transients = []
 with open('./web/models/linear/dm7_i_all_transients.txt') as csv_file:
@@ -265,30 +275,36 @@ with open('./web/models/linear/dm7_i_all_transients.txt') as csv_file:
         dm7 = float(row[1])
         abs_peak = float(row[2])
 
-        transients.append((abs_peak, dm7/7.0, transient_colors[transient_type], transient_type))
+        clr = transient_color_map[transient_colors_id[transient_type]]
+
+        transients.append((abs_peak, dm7/7.0, clr, transient_type))
 
 transient_legend = {
     "Ia":False,
     "Ia-91bg":False,
     "II":False,
-    "Ia-91T":False,
     "SLSN-I":False,
     "IIb":False,
     "Ic":False,
     "Ib":False,
-    "IIn":False
+    "IIn":False,
+    "Ia-91T":False,
 }
+
+mkr_sz = 25
+_mew=1.0
 for t in transients:
     if np.abs((t[1] - 0.003)) > 0.001: # cut out transients close the left edge of the plot
         if not transient_legend[t[3]]:
             transient_legend[t[3]] = True
             # ax.plot(t[1], t[0], "*", markerfacecolor=t[2], markeredgecolor=t[2], markersize=20, alpha=1.0, label=t[3])
-            ax.plot(t[1], t[0], "*", markerfacecolor=t[2], markeredgecolor='k', markersize=20, alpha=1.0, label=t[3], mew=0.5)
+            ax.plot(t[1], t[0], "*", markerfacecolor=t[2], markeredgecolor='k', markersize=mkr_sz, alpha=1.0, label=t[3],
+                    mew=_mew)
         else:
             # ax.plot(t[1], t[0], "*", markerfacecolor=t[2], markeredgecolor=t[2], markersize=20, alpha=1.0)
-            ax.plot(t[1], t[0], "*", markerfacecolor=t[2], markeredgecolor='k', markersize=20, alpha=1.0, mew=0.5)
+            ax.plot(t[1], t[0], "*", markerfacecolor=t[2], markeredgecolor='k', markersize=mkr_sz, alpha=1.0, mew=_mew)
 
-sm = plt.cm.ScalarMappable(norm=norm, cmap=plt.cm.viridis)
+sm = plt.cm.ScalarMappable(norm=norm, cmap=plt.cm.inferno)
 sm.set_array([]) # can be an empty list
 # tks = np.linspace(min_prob, max_prob, 5)
 tks = np.asarray([0.0, 0.15, 0.25, 0.35, max_prob])
@@ -298,7 +314,8 @@ cb = fig.colorbar(sm, ax=ax, orientation='vertical', fraction=0.05, pad=0.02, al
 # cb.set_ticks([0.0, 0.944] + list(tks))
 # cb.set_ticks(tks)
 # tks_strings = ["0%", "25%", "50%", "70%", "95%"]
-tks_strings = ["0%", "15%", "25%", "37%"]
+# tks_strings = ["0%", "15%", "25%", "37%"]
+tks_strings = ["0%", "15%", "25%", "35%"]
 cb.ax.set_yticklabels(tks_strings, fontsize=24)
 cb.set_label("", fontsize=16, labelpad=9.0)
 cb.ax.locator_params(nbins=5)
@@ -314,9 +331,12 @@ cb.ax.tick_params(length=8.0, width=2.0)
 
 # ax.text(0.55, -15.8, "SSS17a", fontsize=22, ha="center", zorder=9999, color="yellow",
 #             path_effects = [path_effects.withStroke(linewidth=2.5, foreground='black')])
-ax.text(0.48, -15.85, "AT 2017gfo", fontsize=19, ha="center", zorder=9999, color="yellow",
-            path_effects = [path_effects.withStroke(linewidth=2.5, foreground='black')])
-ax.plot(0.690769300139, -16.1218, '*', color='yellow', markeredgecolor='black', markersize=24, mew=1.5) #markeredgecolor="black" , alpha=0.25
+ax.text(0.135, -16.06, "AT 2017gfo", fontsize=20, zorder=9999, color="white" #ha="center",
+            , path_effects = [path_effects.withStroke(linewidth=10.0, foreground='black')])
+# )
+# ax.plot(0.690769300139, -16.1218, '*', color='black', markeredgecolor='black',
+ax.plot(0.690769300139, -16.1218, '*', color='black', markeredgecolor='black',
+        markersize=mkr_sz, mew=_mew) #markeredgecolor="black" , alpha=0.25
 print("Prob of Kasen model for SSS17a, r-band: %s" % _2d_func(0.690769300139, -16.1218))
 
 
@@ -340,7 +360,8 @@ ax.set_ylim([-14, -20])
 # ax.set_xlim([3e-3, 9e-1])
 ax.set_xlim([3e-3, 1.5])
 ax.set_xscale('log')
-leg = ax.legend(loc="upper right", fontsize=18, borderpad=0.35, handletextpad=0.0, labelspacing=0.4, framealpha=1.0, edgecolor='k')
+leg = ax.legend(loc="upper right", fontsize=18, borderpad=0.35, handletextpad=0.0, labelspacing=0.4, framealpha=1.0,
+                edgecolor='k', ncol=2, columnspacing=0.0)
 leg.get_frame().set_linewidth(2.0)
 
 plt.xlabel(r'$\Delta$M (mag $\mathrm{day^{-1}}$)',fontsize=32)
@@ -356,7 +377,7 @@ cb.outline.set_linewidth(2.0)
 ax.tick_params(axis='both', which='major', labelsize=24, length=12.0, width=2)
 ax.tick_params(axis='both', which='minor', labelsize=24, length=8.0, width=2)
 
-fig.savefig('./web/events/S190425z/model_detection/0425_Linear_Prob2Detect.png', bbox_inches='tight')
+fig.savefig('./web/events/S190425z/model_detection/linear/0425_Linear_Prob2Detect.png', bbox_inches='tight')
 # fig.savefig('190814_Linear_Prob2Detect_all_Zoom.png', bbox_inches='tight')
 plt.close('all')
 

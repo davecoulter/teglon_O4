@@ -2,7 +2,7 @@ import matplotlib
 
 matplotlib.use("Agg")
 # matplotlib.use("TkAgg")
-
+from matplotlib.ticker import ScalarFormatter
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -125,7 +125,7 @@ utilized_prob = []
 for i in range(36):
     sub_dir = i + 1
     file_num = i + 1
-    f_path = "./web/events/S190425z/model_detection/Detection_KNe_%i.prob" % file_num
+    f_path = "./web/events/S190425z/model_detection/kne/Detection_KNe_%i.prob" % file_num
     # f_path = "../Events/S190814bv/ModelDetection/Detection_KNe_%i.prob" % file_num
     # f_path = "../Events/S190425z/ModelDetection/Detection_KNe_%i.prob" % file_num
     # f_path = "../Events/S190425z/ModelDetection.old/Detection_KNe_%i.prob" % file_num
@@ -196,46 +196,23 @@ gamma = 1.0 / np.sqrt(1.0 - model_vej ** 2)
 grid_Mass_KE = grid_mej * (gamma - 1.0) * M_SUN_CGS * C_CGS ** 2  # ergs
 
 # default to linear
-# blue_norm = colors.Normalize(0.0, 0.35)
-blue_norm = colors.Normalize(0.0, max_prob)
 
-# For 0814
-# red_norm = colors.Normalize(0.0, 2.51e-5)
+# Convert to percent for colorbar...
+blue_norm = colors.Normalize(0.0, max_prob * 100)
+red_norm = colors.Normalize(0.0, max_prob * 100)
 
-# For 0425
-red_norm = colors.Normalize(0.0, max_prob)
-# red_norm = colors.Normalize(0.0, max_prob) # 2.75e-5
-
-# blue_tks = np.asarray([0.0,
-#                        0.07,
-#                        0.14,
-#                        0.21,
-#                        0.28,
-#                        0.35])
-blue_tks = np.linspace(0.0, max_prob, 6)
-# blue_tks = np.asarray([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])
-
-# For 0814
-# red_tks = np.asarray([0.0,
-#                        5e-6,
-#                        1e-5,
-#                        15e-6,
-#                        20e-6,
-#                        25e-6])
-
-# For 0425
-red_tks = np.linspace(0.0, max_prob, 6)
-# red_tks = np.linspace(0, 0.03, 6)
+blue_tks = np.linspace(0.0, max_prob * 100, 6)
+red_tks = np.linspace(0.0, max_prob * 100, 6)
 
 # tks = [min_prob, 1.0e-9, 2.0e-9, 3.0e-9, 4.0e-9, 5.0e-9, max_prob]
 if is_log:
     blue_norm = colors.LogNorm(min_prob, max_prob)
     red_norm = colors.LogNorm(min_prob, max_prob)
+
     blue_tks = np.logspace(np.log10(min_prob), np.log10(max_prob), 5)
     red_tks = np.logspace(np.log10(min_prob), np.log10(max_prob), 5)
 
 fig = plt.figure(figsize=(10, 10), dpi=600)
-# fig = plt.figure(figsize=(8, 8), dpi=300)
 ax = fig.add_subplot(111)
 ax.set_xscale('log')
 ax.set_yscale('log')
@@ -270,7 +247,7 @@ if not is_poster_plot:
 
     ke_lines = ax.contour(grid_vej, grid_mej, grid_Mass_KE, levels=ke_mass_lvls, colors='white',
                           locator=ticker.LogLocator(), zorder=8888)
-    plt.setp(ke_lines.collections, path_effects=[path_effects.withStroke(linewidth=2.0, foreground='black')])
+    plt.setp(ke_lines.collections, path_effects=[path_effects.withStroke(linewidth=3.0, foreground='black')])
     # plt.setp(ke_lines.collections, path_effects=[path_effects.withStroke(linewidth=3.0, foreground='white')])
 
     ke_fmt_dict = {
@@ -284,11 +261,15 @@ if not is_poster_plot:
     # KNe label = 18 font; path effect linewidth = 1.0
     ke_clbls = ax.clabel(ke_lines, inline=True, fontsize=24, fmt=ke_fmt_dict, inline_spacing=10.0,
                          manual=manual_locations)
-    plt.setp(ke_clbls, path_effects=[path_effects.withStroke(linewidth=0.75, foreground='black')], zorder=8888)
+    plt.setp(ke_clbls, path_effects=[path_effects.withStroke(linewidth=3.0, foreground='black')], zorder=8888)
     # plt.setp(ke_clbls, path_effects=[path_effects.withStroke(linewidth=0.5, foreground='white')], zorder=9990)
 
+# cnt = ax.contourf(grid_vej, grid_mej, grid_prob, cmap=plt.cm.inferno,
+#                   levels=np.logspace(np.log10(min_prob), np.log10(max_prob), 1000), zorder=8800)  # , rasterized=True
+
 cnt = ax.contourf(grid_vej, grid_mej, grid_prob, cmap=plt.cm.inferno,
-                  levels=np.logspace(np.log10(min_prob), np.log10(max_prob), 1000), zorder=8800)  # , rasterized=True
+                  levels=np.linspace(min_prob, max_prob, 1000), zorder=8800)  # , rasterized=True
+
 # This corrects the aliasing for eps plots
 for c in cnt.collections:
     c.set_edgecolor("face")
@@ -302,7 +283,7 @@ if blue_kn:
                           levels=[0.0, 0.01, 0.1, 0.25], zorder=9900)  # , 0.35
     # CS_lines = ax.contour(grid_vej, grid_mej, test, colors="red", linewidths=2.0,
     #                       levels=[0.0, 0.01, 0.1, 0.25, 0.3, 0.4, 0.5, max_prob], zorder=9900)  # , 0.35
-    plt.setp(CS_lines.collections, path_effects=[path_effects.withStroke(linewidth=2.5, foreground='black')])
+    plt.setp(CS_lines.collections, path_effects=[path_effects.withStroke(linewidth=3.0, foreground='black')])
 
     fmt_dict = {
         0.0: "",
@@ -324,8 +305,7 @@ if blue_kn:
         (4.0e-2, 1.5e-3)  # 1%
     ]
     clbls = ax.clabel(CS_lines, inline=True, fontsize=24, fmt=fmt_dict, inline_spacing=100.0, manual=manual_locations)
-
-    plt.setp(clbls, path_effects=[path_effects.withStroke(linewidth=1.0, foreground='black')], zorder=9900)
+    plt.setp(clbls, path_effects=[path_effects.withStroke(linewidth=3.0, foreground='black')], zorder=9900)
 else:
     print("here")
 
@@ -342,7 +322,7 @@ else:
                           levels=[0.0, 1.0e-2], zorder=9900)
 
     CS_lines.set_clim(min_prob, max_prob)
-    plt.setp(CS_lines.collections, path_effects=[path_effects.withStroke(linewidth=2.5, foreground='black')])
+    plt.setp(CS_lines.collections, path_effects=[path_effects.withStroke(linewidth=3.0, foreground='black')])
 
     # For 0814
     # fmt_dict = {
@@ -364,7 +344,7 @@ else:
     }
 
     clbls = ax.clabel(CS_lines, inline=True, fontsize=24, fmt=fmt_dict, inline_spacing=120.0)
-    plt.setp(clbls, path_effects=[path_effects.withStroke(linewidth=1.0, foreground='black')], zorder=9900)
+    plt.setp(clbls, path_effects=[path_effects.withStroke(linewidth=3.0, foreground='black')], zorder=9900)
 
 # ax.text(8.8e-2, 2.3e-1, r"$U_{R_{20}} \geq KE$", rotation=31, fontsize=20, zorder=9999)
 if not is_poster_plot:
@@ -373,82 +353,62 @@ else:
     ax.text(4.0e-2, 2.0e-1, "Unphysical Values", rotation=45, fontsize=24, zorder=9999)
 
 sm = None
+sm_norm = None
 if blue_kn:
-    sm = plt.cm.ScalarMappable(norm=blue_norm, cmap=plt.cm.inferno)
+    sm_norm = blue_norm
 else:
-    sm = plt.cm.ScalarMappable(norm=red_norm, cmap=plt.cm.inferno)
+    sm_norm = red_norm
+
+sm = plt.cm.ScalarMappable(norm=sm_norm, cmap=plt.cm.inferno)
 sm.set_array([])  # can be an empty list
 
-cb = fig.colorbar(sm, ax=ax, orientation='vertical', fraction=0.05, pad=0.02, alpha=0.80)
+
+class ScalarFormatterClass(ScalarFormatter):
+    def _set_format(self):
+        self.format = "%1.0f%%"
+
+
+cbformat = ScalarFormatterClass()  # create the
+
+tks = []
 tks_strings = []
 if blue_kn:
+
     # tks_strings = [
     #     "0%",
-    #     "7%",
-    #     "14%",
-    #     "21%",
-    #     "28%",
-    #     "35%"
+    #     "6%",
+    #     "12%",
+    #     "19%",
+    #     "25%",
+    #     "31%"
     # ]
-    # tks_strings = [
-    #     "0%",
-    #     "10%",
-    #     "20%",
-    #     "30%",
-    #     "40%",
-    #     "50%"
-    # ]
-    # 0425
-    tks_strings = [
-        "0%",
-        "6%",
-        "12%",
-        "19%",
-        "25%",
-        "31%"
-    ]
-    # cb.set_ticks(blue_tks)
+    tks = blue_tks
 else:
-    # red_tks = np.linspace([0.0,
-    #                        5e-6,
-    #                        10e-6,
-    #                        15e-6,
-    #                        20e-6,
-    #                        25e-6])
-
-    # 0814
     # tks_strings = [
-    #     # "0",
-    #     # "1",
-    #     # "2",
-    #     # "3",
-    #     # "4",
-    #     # "5"
-    #     "0",
-    #     "5",
-    #     "10",
-    #     "15",
-    #     "20",
-    #     "25"
+    #     "0%",
+    #     "1.1%",
+    #     "0.02%",
+    #     "0.03%",
+    #     "0.04%",
+    #     "2.8%"
     # ]
 
-    # 0425
-    tks_strings = [
-        "0.0%",
-        "0.6%",
-        "1.1%",
-        "1.7%",
-        "2.3%",
-        "2.8%"
-    ]
-    cb.set_ticks(red_tks)
     # tks_strings = ["%0.0f" % t for t in tks]
+
+    tks = red_tks
+    # cbformat.set_powerlimits((-2, 0))  # set the limits for sci. not.
 
 # Turn this back on
 # tks_strings = ["0%", "11%", "22%", "33%", "44%"]
 
 
 # cb.ax.set_yticklabels(tks_strings, fontsize=24)
+
+
+cb = fig.colorbar(sm, ax=ax, orientation='vertical', fraction=0.05, pad=0.02, alpha=0.80, format=cbformat)
+cb.set_ticks(tks)
+cb.ax.tick_params(labelsize=24)
+# cb.ax.yaxis.get_offset_text().set_fontsize(24)
 
 
 if blue_kn:
@@ -472,23 +432,27 @@ cb.ax.tick_params(length=8.0, width=2.0)
 # ax.text(1.5e-1, 2e-4, r"$Y_e$ = " + "%0.2f" % ye_thresh, fontsize=24, color="white",
 if not is_poster_plot:
     ax.text(8e-2, 2e-3, r"$Y_e$ = " + "%0.2f" % ye_thresh, fontsize=32, color="white",
-            path_effects=[path_effects.withStroke(linewidth=2.0, foreground='black')], zorder=9999)
+            path_effects=[path_effects.withStroke(linewidth=3.5, foreground='black')], zorder=9999)
 
 if blue_kn:
     # SSS17a - Blue KN
     #deepskyblue
-    ax.errorbar(0.25, 0.025, fmt="*", mfc="black", mec="black", ms=24.0, zorder=9999, mew=1.5)
+    e = ax.errorbar(0.25, 0.025, fmt="*", mfc="black", mec="black", ecolor="black",
+                    elinewidth=1.0, ms=24.0, zorder=9999, mew=1.5)
     print("Prob of blue KN: %s" % griddata(points, values, (0.25, 0.025)))
+
+
+
 
     # Test from Charlie
     # ax.errorbar(0.15, 0.06, fmt="*", mfc="deepskyblue", mec="black", ms=24.0, zorder=9999, mew=1.5)
 
     if not is_poster_plot:
-        pass
-        # ax.text(0.23, 0.0135, "AT 2017gfo-like\nBlue Component", fontsize=20, color="black",
-        #         # ax.text(0.23, 0.0135, "SSS17a-like\nBlue Component", fontsize=20, color="white",
-        #         ha="center", zorder=9999,
-        #         path_effects=[path_effects.withStroke(linewidth=1.0, foreground='black')])
+
+        ax.text(0.23, 0.0125, "AT 2017gfo-like\nBlue Component", fontsize=20, color="white",
+                # ax.text(0.23, 0.0135, "SSS17a-like\nBlue Component", fontsize=20, color="white",
+                ha="center", zorder=9999,
+                path_effects=[path_effects.withStroke(linewidth=10.0, foreground='black')])
     else:
         ax.text(0.23, 0.0135, "Neutron Star\nMerger", fontsize=20, color="white",
                 ha="center", zorder=9999,
@@ -512,8 +476,8 @@ else:
     e[2][0].set_path_effects([path_effects.Stroke(linewidth=5.0, foreground="black"), path_effects.Normal()])
     e[2][1].set_path_effects([path_effects.Stroke(linewidth=5.0, foreground="black"), path_effects.Normal()])
 
-    # ax.text(0.31, 0.023, "GRB 130603B\nAfterglow Excess", fontsize=20, color="white",
-    #         ha="center", zorder=9999, path_effects=[path_effects.withStroke(linewidth=2.0, foreground='black')])
+    ax.text(0.31, 0.023, "GRB 130603B\nAfterglow Excess", fontsize=20, color="white",
+            ha="center", zorder=9999, path_effects=[path_effects.withStroke(linewidth=10.0, foreground='black')])
 
     # SSS17a - Red KN
     # From Charlie's SSS17a paper:
@@ -531,8 +495,8 @@ else:
     e[2][0].set_path_effects([path_effects.Stroke(linewidth=5.0, foreground="black"), path_effects.Normal()])
     e[2][1].set_path_effects([path_effects.Stroke(linewidth=5.0, foreground="black"), path_effects.Normal()])
 
-    # ax.text(0.17, 0.012, "AT 2017gfo-like\nRed Component", fontsize=20, ha="center", zorder=9999, color="white",
-    #         path_effects=[path_effects.withStroke(linewidth=2.0, foreground='black')])
+    ax.text(0.17, 0.012, "AT 2017gfo-like\nRed Component", fontsize=20, ha="center", zorder=9999, color="white",
+            path_effects=[path_effects.withStroke(linewidth=10.0, foreground='black')])
     # ax.text(0.17, 0.012, "SSS17a-like\nRed Component", fontsize=20, ha="center", zorder=9999, color="white",
     #         path_effects = [path_effects.withStroke(linewidth=2.0, foreground='black')])
     # path_effects = [path_effects.withStroke(linewidth=1.25, foreground='white')]
@@ -596,7 +560,7 @@ print(prob3)
 test = 1
 
 if not is_poster_plot:
-    fig.savefig('./web/events/S190425z/model_detection/0425_KNe_Prob2Detect_ye_%0.3f.png' % ye_thresh,
+    fig.savefig('./web/events/S190425z/model_detection/kne/0425_KNe_Prob2Detect_ye_%0.3f.png' % ye_thresh,
                 bbox_inches='tight')
 # else:
 #     fig.savefig('poster_KNE_Sensitivity.png', bbox_inches='tight', transparent=True)

@@ -135,7 +135,7 @@ class Teglon:
         parser.add_option('--healpix_file', default='bayestar.fits.gz', type="str",
                           help='Healpix filename. Default `bayestar.fits.gz`.')
 
-        parser.add_option('--model_output_dir', default="./web/events/{GWID}/model_detection", type="str",
+        parser.add_option('--model_output_dir', default="./web/events/{GWID}/model_detection/{MODEL_TYPE}", type="str",
                           help='Directory for where to output processed models.')
 
         parser.add_option('--num_cpu', default="5", type="int",
@@ -181,7 +181,9 @@ class Teglon:
                 formatted_model_output_dir = formatted_model_output_dir.replace("{GWID}", self.options.gw_id)
 
         if "{MODEL_TYPE}" in formatted_model_base_input_dir:
-            formatted_model_base_input_dir = formatted_model_base_input_dir.replace("{MODEL_TYPE}", self.options.model_type)
+            formatted_model_base_input_dir = formatted_model_base_input_dir.replace("{MODEL_TYPE}",
+                                                                                    self.options.model_type)
+            formatted_model_output_dir = formatted_model_output_dir.replace("{MODEL_TYPE}", self.options.model_type)
 
         healpix_map_select = "SELECT id, NSIDE FROM HealpixMap WHERE GWID = '%s' and Filename = '%s'"
         map_check = query_db([healpix_map_select % (self.options.gw_id, self.options.healpix_file)])[0]

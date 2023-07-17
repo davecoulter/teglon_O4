@@ -18,7 +18,7 @@ from web.src.objects.Teglon_Shape import *
 
 class Tile(Teglon_Shape):
     def __init__(self, central_ra_deg, central_dec_deg, detector, nside, position_angle_deg=0.0, net_prob=0.0,
-                 tile_id=None, tile_mwe=0.0):
+                 tile_id=None, tile_mwe=0.0, plot_color="black"):
 
         self.id = tile_id
 
@@ -37,6 +37,7 @@ class Tile(Teglon_Shape):
         self.mag_lim = None
         self.exp_time = None
         self.band_id = None
+        self.plot_color = plot_color
 
         # Gets set after construction
         self.field_name = None

@@ -1,5 +1,6 @@
 import matplotlib
 matplotlib.use("Agg")
+from matplotlib.ticker import ScalarFormatter
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -45,8 +46,8 @@ wu_2018_opening_angle = 5.0 # degrees
 # DEBUG
 additional_E_iso_scale = 1.0
 
-# grb_axis = "onaxis"
-grb_axis = "offaxis"
+grb_axis = "onaxis"
+# grb_axis = "offaxis"
 
 is_poster_plot = False
 
@@ -71,28 +72,16 @@ all_probs = []
 for i in range(27):
     sub_dir = i+1
 
-    results_table = Table.read("./web/events/%s/model_detection/Detection_Results_SGRB_%s_%s.prob" %
-                               (gw_id, grb_axis, sub_dir), format='ascii.ecsv')
-
-    # results_table = Table.read("../Events/S190814bv/ModelDetection/Detection_Results_SGRB_20200811_grb_%s_%s.prob" %
-    #                            (grb_axis, sub_dir), format='ascii.ecsv')
-
-    # results_table = Table.read("../Events/S190814bv/ModelDetection/Detection_Results_grb_%s_3_%s.prob" %
-    #                            (grb_axis, sub_dir), format='ascii.ecsv')
+    results_table = Table.read("./web/events/%s/model_detection/grb/%s/Detection_Results_SGRB_%s_%s.prob" %
+                               (gw_id, grb_axis, grb_axis, sub_dir), format='ascii.ecsv')
 
     # E0 in units of 1e50 ergs... Convert to FOE with additional scaling to E_iso
     E_result = np.asarray(list(results_table['E'])) * additional_E_iso_scale / 10.0
     n_result = list(results_table['n'])
     prob_result = list(results_table['Prob'])
 
-    # all_n += n_result
-    # all_probs += prob_result
 
     for j, E in enumerate(E_result):
-
-        # if E > 10.0:
-        #     print("Skip %s" % E)
-        #     continue
 
         if E not in E_n:
             E_n[E] = []
@@ -101,7 +90,6 @@ for i in range(27):
         if E not in E_keys:
             E_keys.append(E)
 
-        # if n_result[j] <= 1.0:
         if True:
             all_n.append(n_result[j])
             all_probs.append(prob_result[j])
@@ -119,9 +107,9 @@ for i in range(27):
 
 print(len(all_probs))
 print("%s closest model" % grb_axis)
-print(closest_sep)
-print(closest_model_props)
-print(closest_sub_dir)
+print("closest sep: %s" % closest_sep)
+print("closest model: %s" % closest_model_props)
+print("closest subdir: %s" % closest_sub_dir)
 
 
 n_rows = OrderedDict()
@@ -152,29 +140,12 @@ for E in Sorted_E:
 # From the data, get a log-spaced sampling of the ranges
 arr_len = 100
 model_E_input = np.logspace(np.min(np.log10(E_keys)) + 0.000001, np.max(np.log10(E_keys)) - 0.000001, arr_len)
-# model_E_input = np.logspace(np.min(np.log10(E_keys)), np.max(np.log10(E_keys)), arr_len)
 model_n_input = np.logspace(np.min(np.log10(all_n)), np.max(np.log10(all_n)), arr_len)
-
-# model_E_input = np.logspace(np.min(np.log10(1.1e-6)), np.max(np.log10(5.0e1)), arr_len) #np.min(np.log10(1.0e-2)), np.max(np.log10(5.0e1))
-# model_n_input = np.logspace(np.min(np.log10(all_n)), np.max(np.log10(all_n)), arr_len) #np.min(np.log10(1.0e-6) 4.0e0
-
-# model_E_input = np.logspace(np.log10(10.0e-3), np.log10(80.0), arr_len)
-# model_n_input = np.logspace(np.log10(10.0e-6), np.max(np.log10(8.0)), arr_len)
-
-# model_n_input = np.logspace(np.log10(1.59e-6), np.max(np.log10(all_n)), 100) # HACK for latest 20 deg SGRB models from Charlie
 
 # Interpolate rows
 Interp_E_prob = OrderedDict()
 for E in Sorted_E:
     n = Sorted_E_n[E]
-
-    # min_n = np.min(n)
-    # max_n = np.max(n)
-    # if min_n > 1e-6 or max_n < 1.0:
-    #     print("n range doesn't work with interpolation model!")
-    #     print("Problem E: %s" % E)
-    #     continue
-
 
     p = prob_rows[E]
     test_f = interp1d(n, p, kind="slinear") # , fill_value="extrapolate"
@@ -222,7 +193,7 @@ for mt in model_tuples:
     Z.append(mt[2])
 
 # CHECK INITIAL PROB RANGE
-print(np.min(Z), np.max(Z))
+print("min/max prob from files: %s, %s" % (np.min(Z), np.max(Z)))
 
 # INTERPOLATE IN LOGSPACE
 _2d_func = interp2d(np.log10(X), np.log10(Y), Z, kind="linear")
@@ -231,7 +202,7 @@ _2d_func = interp2d(np.log10(X), np.log10(Y), Z, kind="linear")
 z_new = _2d_func(np.log10(model_n_input), np.log10(model_E_input))
 
 # INTERPOLATED PROB RANGE (SHOULD MATCH INITIAL)
-print(np.min(z_new), np.max(z_new))
+print("min/max prob from interp: %s, %s" % (np.min(z_new), np.max(z_new)))
 
 # # GRB 170817A - convert Troja et al. 2017 to FOE using 13 degrees and Eq 1 from Wu 2018
 # GRB170817A_E_k_iso_FOE = (3e+50 * 2/(1-np.cos(np.radians(13.0)/2.0))) / 1e+51
@@ -247,17 +218,7 @@ GRB170817A_n = 3e-1
 
 
 print("\n\nDone with interp\n\n")
-# raise Exception("Stop")
 
-
-
-# min_prob = np.min(z_new)
-# max_prob = np.max(z_new)
-# norm = colors.Normalize(min_prob, max_prob)
-
-# min_prob = np.min(all_probs)
-# max_prob = np.max(all_probs)
-# norm = colors.Normalize(min_prob, max_prob)
 
 min_prob_orig = np.min(all_probs)
 max_prob_orig = np.max(all_probs)
@@ -269,103 +230,37 @@ max_prob = np.max(z_new)
 print("Min Interp Prob: %s" % min_prob)
 print("Max Interp Prob: %s" % max_prob)
 
-# raise Exception("Stop!")
 
 min_prob = min_prob_orig
 max_prob = max_prob_orig
-# norm = colors.Normalize(min_prob, max_prob)
 
-# 0814
-# norm = colors.Normalize(0.0, 0.95)
+# Convert to percent for colorbar...
+norm = colors.LogNorm(min_prob_orig * 100, max_prob_orig * 100)
+tks = np.logspace(np.log10(min_prob_orig * 100), np.log10(max_prob_orig * 100), 4)
+print(tks)
 
-# 0425
-# norm = colors.Normalize(min_prob, max_prob)
-norm = colors.LogNorm(min_prob, max_prob)
-# norm = colors.LogNorm(min_prob_orig, max_prob_orig)
-
-fig = plt.figure(figsize=(10, 10), dpi=600)
+fig = plt.figure(figsize=(10,10), dpi=600)
 ax = fig.add_subplot(111)
-
-# By Row
-# for E in Sorted_E:
-#
-#     probs = Interp_E_prob[E]
-#     for i, p in enumerate(probs):
-#         clr = plt.cm.viridis(norm(p))
-#         ax.plot(model_n_input[i], E, 's', color=clr, markeredgecolor=clr, markersize=17.5)
-#
-#     # n_list = Sorted_E_n[E]
-#     # prob_list = Sorted_E_prob[E]
-#
-#     # for i, p in enumerate(prob_list):
-#     #     clr = plt.cm.viridis(norm(p))
-#     #     ax.plot(n_list[i], E, 's', color=clr, markeredgecolor=clr, markersize=17.5)
-
-
-# # By Column
-# nlist = Sorted_E_n[E_keys[0]]
-# for n in nlist:
-#     probs = Interp_n_prob[n]
-#     for i, p in enumerate(probs):
-#         clr = plt.cm.viridis(norm(p))
-#         ax.plot(n, model_E_input[i], 's', color=clr, markeredgecolor=clr, markersize=17.5)
-#
-#
-# test_E = Sorted_E[15]
-# test_n_list = Sorted_E_n[test_E]
-# test_prob_list = Sorted_E_prob[test_E]
-# for n in test_n_list:
-#     ax.plot(n, test_E, 's', color='None', markeredgecolor='r', markersize=17.5)
-
 
 
 print("plotting...")
-# By Column
-# for i, n in enumerate(model_n_input):
-#     n_probs = Interp_n_prob[n]
-#     for j, prob in enumerate(n_probs):
-#         clr = plt.cm.viridis(norm(prob))
-#         ax.plot(n, model_E_input[j], 's', color=clr, markeredgecolor=clr, markersize=17.5)
 
-for mt in model_tuples:
-    clr = plt.cm.viridis(norm(mt[2]))
-    ax.plot(mt[0], mt[1], 's', color=clr, markeredgecolor=clr, markersize=15)
 
 # DATA GRID IN LINEAR SPACE (PLOT AXES WILL BE LOG SCALED)
 xx, yy = np.meshgrid(model_n_input, model_E_input)
 test = ndimage.gaussian_filter(z_new, sigma=1.0, order=0)
-
-# CS_filled = ax.contourf(xx, yy, test, cmap=plt.cm.viridis, levels=np.linspace(0, max_prob, 200))
-# CS_filled = ax.contourf(xx, yy, test, cmap=plt.cm.viridis, levels=np.linspace(min_prob, max_prob, 200))
+from matplotlib import ticker
+CS_filled = ax.contourf(xx, yy, test, cmap=plt.cm.inferno, locator=ticker.LogLocator(),
+                        levels=np.logspace(np.log10(min_prob), np.log10(max_prob), 1000))
+                        # , levels=np.logspace(np.log10(min_prob), np.log10(max_prob), 1000))
 # CS_filled = ax.contourf(xx, yy, test, cmap=plt.cm.viridis, levels=np.logspace(np.log10(min_prob), np.log10(max_prob), 200))
-
-
-# 0814
-# CS_lines50 = ax.contour(xx, yy, test, colors="red", levels=[0.5], linewidths=2.0)
-# plt.setp(CS_lines50.collections, path_effects=[path_effects.withStroke(linewidth=2.5, foreground='black')])
-#
-# CS_lines10 = ax.contour(xx, yy, test, colors="red", levels=[0.1], linewidths=2.0)
-# plt.setp(CS_lines10.collections, path_effects=[path_effects.withStroke(linewidth=2.5, foreground='black')])
-#
-# CS_lines90 = ax.contour(xx, yy, test, colors="red", levels=[0.9], linewidths=2.0)
-# plt.setp(CS_lines90.collections, path_effects=[path_effects.withStroke(linewidth=2.5, foreground='black')])
-
-# 0425
-# CS_lines10 = ax.contour(xx, yy, test, colors="red", levels=[0.10], linewidths=2.0)
-# plt.setp(CS_lines10.collections, path_effects=[path_effects.withStroke(linewidth=2.5, foreground='black')])
-#
-# CS_lines20 = ax.contour(xx, yy, test, colors="red", levels=[0.20], linewidths=2.0)
-# plt.setp(CS_lines20.collections, path_effects=[path_effects.withStroke(linewidth=2.5, foreground='black')])
-#
-# CS_lines30 = ax.contour(xx, yy, test, colors="red", levels=[0.30], linewidths=2.0)
-# plt.setp(CS_lines30.collections, path_effects=[path_effects.withStroke(linewidth=2.5, foreground='black')])
 
 
 if grb_axis == "onaxis":
 
     # 0425 on-axis
-    CS_lines90 = ax.contour(xx, yy, test, colors="red", levels=[0.33], linewidths=2.0)
-    plt.setp(CS_lines90.collections, path_effects=[path_effects.withStroke(linewidth=2.5, foreground='black')])
+    CS_lines90 = ax.contour(xx, yy, test, colors="mediumturquoise", levels=[0.0, 0.10], linewidths=2.0)
+    plt.setp(CS_lines90.collections, path_effects=[path_effects.withStroke(linewidth=3.0, foreground='black')])
 
     ##### GRB 170817A #####
 
@@ -378,15 +273,11 @@ if grb_axis == "onaxis":
     # manual_locations1 = [(1e-1, 1e-2)]
     # 0425
     fmt_dict = {
-        0.33: "33%",
+        0.0: "",
+        0.10: "10%",
     }
-    # manual_locations1 = [(1e-1, 1e-2)]
-
-    # 0814
-    # clbls90 = ax.clabel(CS_lines90, inline=True, inline_spacing=130, fontsize=24, fmt=fmt_dict,
-    #                     manual=manual_locations1)
-    # 0425
     clbls90 = ax.clabel(CS_lines90, inline=True, fontsize=24, fmt=fmt_dict)  # inline_spacing=130,
+    plt.setp(clbls90, path_effects=[path_effects.withStroke(linewidth=3.0, foreground='black')], zorder=9900)
 
     # for c in clbls90:
     #     c.set_rotation(20)
@@ -400,7 +291,7 @@ if grb_axis == "onaxis":
     #     c.set_rotation(20)
     #
     # plt.setp(clbls50, path_effects=[path_effects.withStroke(linewidth=1.0, foreground='black')], zorder=9900)
-    plt.setp(clbls90, path_effects=[path_effects.withStroke(linewidth=1.0, foreground='black')], zorder=9900)
+    # plt.setp(clbls90, path_effects=[path_effects.withStroke(linewidth=1.0, foreground='black')], zorder=9900)
 
     if not is_poster_plot:
         pass
@@ -554,16 +445,16 @@ for gi, g in enumerate(grbs):
 
     # make_error_boxes(ax, g.n, g.Eiso, xerror, yerror)
 
-    e = ax.errorbar(x=g.n, y=g.Eiso, xerr=xerror, yerr=yerror, fmt='D', mfc='red', ms=10,
-                mec="black", ecolor="red", elinewidth=2.0, mew=1.0, capsize=5.0)
+    e = ax.errorbar(x=g.n, y=g.Eiso, xerr=xerror, yerr=yerror, fmt='D', mfc='black', ms=18,
+                mec="white", ecolor="white", elinewidth=1.0, mew=1.5, capsize=5.0)
 
-    e[1][0].set_path_effects([path_effects.Stroke(linewidth=3.0, foreground="black"), path_effects.Normal()])
-    e[1][1].set_path_effects([path_effects.Stroke(linewidth=3.0, foreground="black"), path_effects.Normal()])
-    e[1][2].set_path_effects([path_effects.Stroke(linewidth=3.0, foreground="black"), path_effects.Normal()])
-    e[1][3].set_path_effects([path_effects.Stroke(linewidth=3.0, foreground="black"), path_effects.Normal()])
+    e[1][0].set_path_effects([path_effects.Stroke(linewidth=5.0, foreground="black"), path_effects.Normal()])
+    e[1][1].set_path_effects([path_effects.Stroke(linewidth=5.0, foreground="black"), path_effects.Normal()])
+    e[1][2].set_path_effects([path_effects.Stroke(linewidth=5.0, foreground="black"), path_effects.Normal()])
+    e[1][3].set_path_effects([path_effects.Stroke(linewidth=5.0, foreground="black"), path_effects.Normal()])
 
-    e[2][0].set_path_effects([path_effects.Stroke(linewidth=3.0, foreground="black"), path_effects.Normal()])
-    e[2][1].set_path_effects([path_effects.Stroke(linewidth=3.0, foreground="black"), path_effects.Normal()])
+    e[2][0].set_path_effects([path_effects.Stroke(linewidth=5.0, foreground="black"), path_effects.Normal()])
+    e[2][1].set_path_effects([path_effects.Stroke(linewidth=5.0, foreground="black"), path_effects.Normal()])
 
 ax.errorbar(x=1e-6, y=0, fmt='D', color='red', label="SGRBs from\nFong et al. 2015", ms=16)
 
@@ -572,13 +463,13 @@ ax.errorbar(x=1e-6, y=0, fmt='D', color='red', label="SGRBs from\nFong et al. 20
 ##### GRB 170817A #####
 
 if not is_poster_plot:
-    ax.text(1.0e-1, 3.5, "GRB 170817A", fontsize=22, ha="center", zorder=9999, color="deepskyblue", #color="deepskyblue",
-                path_effects = [path_effects.withStroke(linewidth=2.0, foreground='black')])
+    ax.text(4.0e-2, 3.6, "GRB 170817A", fontsize=20, zorder=9999, color="white", #color="deepskyblue",
+                path_effects = [path_effects.withStroke(linewidth=10.0, foreground='black')])
 else:
     ax.text(1.6e-1, 3.5, "Short GRB", fontsize=22, ha="center", zorder=9999, color="deepskyblue",
             # color="deepskyblue",
             path_effects=[path_effects.withStroke(linewidth=2.0, foreground='black')])
-ax.errorbar(x=GRB170817A_n, y=GRB170817A_E_k_iso_FOE, fmt='*', mew=1.0, mec="black", ms=24.0, color='deepskyblue',
+ax.errorbar(x=GRB170817A_n, y=GRB170817A_E_k_iso_FOE, fmt='*', mew=1.5, mec="black", ms=24.0, color='black',
             label="GRB 170817A\nMurguia-berthier et al. 2017")
 
 
@@ -604,50 +495,40 @@ ax.set_yscale('log')
 ax.set_xscale('log')
 
 
+sm = plt.cm.ScalarMappable(norm=norm, cmap=plt.cm.inferno)
+sm.set_array([])  # can be an empty list
 
-sm = plt.cm.ScalarMappable(norm=norm, cmap=plt.cm.viridis)
-sm.set_array([]) # can be an empty list
+class ScalarFormatterClass(ScalarFormatter):
+    def _set_format(self):
+        self.format = "%2.2e"
 
-print(grb_axis)
-print(min_prob, max_prob)
+cbformat = ScalarFormatterClass()  # create the
 
-# 0425
-# tks = np.linspace(min_prob, max_prob, 5)
-tks = np.logspace(np.log10(min_prob), np.log10(max_prob), 5)
-
-# 0814
-# tks = np.asarray([0, 0.25, 0.5, 0.75, 0.95])
+print("axis: %s" % grb_axis)
+print("min/max prob: %s, %s" % (min_prob, max_prob))
 
 
-# tks = np.linspace(np.min(prob), np.max(prob), 5)
-# tks = np.logspace(np.log10(min_prob), np.log10(max_prob), 9)
+# [1.87613862e-06 4.63174163e-04 1.14346724e-01 2.82294963e+01] # in percent
+tks_strings_on_axis = [
+    "0%",
+    "5e-4%",
+    "0.1%",
+    "28%",
+    # "0.0",
+    # "4.6e-6",
+    # "1.1e-3",
+    # "0.28",
 
-# tks_strings = []
-# for t in tks:
-#     tks_strings.append('%0.2f' % (t * 100))
-# tks_strings_off_axis = ["0%", "24%", "47%", "71%", "94%"]
-# tks_strings_on_axis = ["14%", "34%", "54%", "74%", "94%"]
+]
 
-# # 0814
-# tks_strings_off_axis = ["0%", "25%", "50%", "75%", "95%"]
-# 0425
-# tks_strings_off_axis = ["%0.3f" % t for t in tks]
-tks_strings_off_axis = ["%0.1e%%" % (t*100) for t in tks]
-# # 0814
-# tks_strings_on_axis = ["0%", "25%", "50%", "75%", "95%"]
-
-# 0425
-# tks_strings_on_axis = ["27.9%", "29.5%", "31.0%", "32.7%", "34.3%"]
-tks_strings_on_axis = ["%0.1f%%" % (t*100) for t in tks]
-
-cb = fig.colorbar(sm, ax=ax, orientation='vertical', fraction=0.05, pad=0.02) #, alpha=0.80
+cb = fig.colorbar(sm, ax=ax, orientation='vertical', fraction=0.05, pad=0.02) #, alpha=0.80 , format=cbformat
 cb.set_ticks(tks)
-cb.ax.tick_params(length=6.0) # width=2.0,
+cb.ax.tick_params(length=6.0, labelsize=24) # width=2.0,
 
 if grb_axis == "onaxis":
     cb.ax.set_yticklabels(tks_strings_on_axis, fontsize=24)
-else:
-    cb.ax.set_yticklabels(tks_strings_off_axis, fontsize=24)
+# else:
+#     cb.ax.set_yticklabels(tks_strings_off_axis, fontsize=24)
 
 if not is_poster_plot:
     cb.set_label("", fontsize=16, labelpad=9.0)
@@ -696,7 +577,8 @@ for axis in ['top', 'bottom', 'left', 'right']:
 
 if not is_poster_plot:
     # fig.savefig('GW190814_GRB_Prob2Detect_%s.png' % grb_axis, bbox_inches='tight')
-    fig.savefig('./web/events/S190425z/model_detection/0425_GRB_Prob2Detect_%s.png' % grb_axis, bbox_inches='tight')
+    fig.savefig('./web/events/S190425z/model_detection/grb/%s/0425_GRB_Prob2Detect_%s.png' % (grb_axis, grb_axis),
+                bbox_inches='tight')
 else:
     fig.savefig('./web/events/S190425z/model_detection/GW190814_GRB_poster.png', bbox_inches='tight', transparent=True)
 plt.close('all')
