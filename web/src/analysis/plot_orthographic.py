@@ -58,7 +58,7 @@ axes = {
 
 
 for ax_name, ax in axes.items():
-    ax.grid(color='black', linestyle=':', linewidth=0.25)
+    ax.grid(color='black', linestyle=':', linewidth=0.4)
 
     # modified_labels = []
     # for item in ax.get_yticklabels():
@@ -173,8 +173,7 @@ if plot_dust:
 if plot_contours:
     for ax_name, ax in axes.items():
         _2d_contours = ax.contour_hpx(_90_50_levels_2d, colors=['None', 'black', 'black'], levels=[0.0, 0.5, 0.9],
-                                      linewidths=0.25, alpha=1.0,
-                                      path_effects=[path_effects.withStroke(linewidth=0.75, foreground='black')])
+                                      linewidths=0.60, alpha=1.0)
 
         plt.setp(_2d_contours.collections, path_effects=[path_effects.withStroke(linewidth=1.0, foreground='black',
                                                                                  alpha=0.1)])
@@ -220,19 +219,6 @@ observed_tile_select = '''
     '''
 ot_result = query_db([observed_tile_select])[0]
 
-# tile_color_dict = {
-#     1: "black",  # Swope
-#     2: "magenta",  # ANDICAM-CCD
-#     3: "red",  # THACHER
-#     4: "limegreen",  # NICKEL
-#     7: "gold",  # LCOGT
-#     11: "turquoise",  # CSS
-#     12: "violet",  # Swift
-#     13: "brown",  # MMT
-#     46: "royalblue",  # ZTF
-#     45: "orange",  # GOTO-4
-#     51: "slateblue"  # ANDICAM-IR
-# }
 tile_color_dict = {
     1: "black",  # Swope
     2: "blueviolet",  # ANDICAM-CCD
@@ -304,36 +290,21 @@ if plot_tiles:
                     markerfacecolor=face_clr, markersize=tile_marker_size_dict[t.detector.id],
                     label=t.detector.name, linestyle='None')
 
-
-
     for ax_name, ax in axes.items():
         for t in big_tile_list:
             r, g, b = colors.to_rgb(t.plot_color)
             edg_clr = (r, g, b, 1.0)
             face_clr = (r, g, b, 0.1)
 
-            # if t.detector.name not in legend_labels:
-            #     legend_labels.append(t.detector.name)
-            #     ax.plot(x1, y1, marker='s', markeredgecolor=edg_clr,
-            #             markerfacecolor=face_clr, markersize=tile_marker_size_dict[t.detector.id],
-            #                  label=t.detector.name, linestyle='None')
-
             t.plot2(ax, facecolor=face_clr, edgecolor=edg_clr, linewidth=0.35)
 
-
         for t in little_tile_list:
-
             r, g, b = colors.to_rgb(t.plot_color)
             edg_clr = (r, g, b, 1.0)
             face_clr = (r, g, b, 0.1)
 
-            # if t.detector.name not in legend_labels:
-            #     legend_labels.append(t.detector.name)
-            #     ax.plot(x1, y1, marker='s', markeredgecolor=edg_clr,
-            #             markerfacecolor=face_clr, markersize=tile_marker_size_dict[t.detector.id],
-            #             label=t.detector.name, linestyle='None')
-
             t.plot2(ax, facecolor=face_clr, edgecolor=edg_clr, linewidth=0.5)
+
 
 if plot_cutout:
     axes["inset"] = plt.axes(
@@ -351,14 +322,9 @@ if plot_cutout:
         0.9: "90%"
     }
 
-    # manual_locations = [
-    #     (245, 15), # 50
-    #     (235, 20), # 90
-    # ]
-
     _2d_contours = axes["inset"].contour_hpx(_90_50_levels_2d, colors=['None', 'black', 'black'],
-                                             levels=[0.0, 0.5, 0.9], linewidths=0.25, alpha=1.0,
-                                path_effects=[path_effects.withStroke(linewidth=1.0, foreground='black')])
+                                             levels=[0.0, 0.5, 0.9], linewidths=0.5, alpha=1.0)
+    # path_effects = [path_effects.withStroke(linewidth=1.0, foreground='black')]
 
     plt.setp(_2d_contours.collections, path_effects=[path_effects.withStroke(linewidth=2.5, foreground='black',
                                                                              alpha=0.1)])
@@ -445,7 +411,7 @@ if plot_cutout:
     axes["east"].connect_inset_axes(axes["inset"], 'upper left')
     axes["east"].connect_inset_axes(axes["inset"], 'lower left')
 
-    axes["inset"].grid(color='black', linestyle=':', linewidth=0.15)
+    axes["inset"].grid(color='black', linestyle=':', linewidth=0.25)
     axes["inset"].tick_params(axis='both', colors='black')
 
 

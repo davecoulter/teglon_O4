@@ -165,7 +165,7 @@ if plot_2D or plot_4D:
             self.format = "%1.1f"
     cbformat = ScalarFormatterClass()  # create the formatter
 
-    ax.contour_hpx(_90_50_levels_4d, colors=['None', 'white', 'white'], levels=[0.0, 0.5, 0.9],
+    ax.contour_hpx(_90_50_levels_2d, colors=['None', 'white', 'white'], levels=[0.0, 0.5, 0.9],
                    linewidths=0.25, alpha=1.0,
                    path_effects=[path_effects.withStroke(linewidth=0.75, foreground='black')])
     norm = None
