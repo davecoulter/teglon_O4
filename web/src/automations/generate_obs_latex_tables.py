@@ -122,6 +122,21 @@ def build_latex_table(gw_id, healpix_dir, healpix_file, telescope_ids_to_include
     \\end{deluxetable}''', file=fout)
 
 def build_teglon_perf_table(gw_id, healpix_dir, healpix_file, telescope_ids_to_include):
+    detect_display_name_dict = {
+        1: "Swope",  # Swope
+        2: "ANDICAM\nCCD",  # ANDICAM-CCD
+        3: "Thacher",  # THACHER
+        4: "Nickel",  # NICKEL
+        7: "Las Cumbres",  # LCOGT
+        11: "CSS",  # CSS
+        12: r"${\it Swift}$",  # Swift
+        13: "MMTCam",  # MMT
+        20: "ZTF",  # ZTF
+        46: "ZTF",  # ZTF
+        45: "GOTO-4",  # GOTO-4
+        51: "ANDICAM\nIR"  # ANDICAM-IR
+    }
+
     formatted_healpix_dir = healpix_dir
     formatted_healpix_dir = formatted_healpix_dir.replace("{GWID}", gw_id)
 
@@ -177,12 +192,14 @@ def build_teglon_perf_table(gw_id, healpix_dir, healpix_file, telescope_ids_to_i
         SELECT 
             _at.detector_name,
             D.Area as FOV,
-            COUNT(_at.MJD) AS TotalTiles
+            COUNT(_at.MJD) AS TotalTiles,
+            D.id
         FROM All_Tiles _at
         JOIN Detector D on D.id = _at.detector_id
         GROUP BY
             _at.detector_name, 
-            D.Area
+            D.Area,
+            D.id
         ORDER BY
             D.Area;
     '''
@@ -217,10 +234,16 @@ def build_teglon_perf_table(gw_id, healpix_dir, healpix_file, telescope_ids_to_i
         detect_name = row[0]
         fov = float(row[1])
         num_tiles = int(row[2])
+        detector_id = int(row[3])
+
+        # We aren't considering KAIT right now
+        if detector_id not in detect_display_name_dict:
+            continue
+
         if detect_name not in by_detector:
             by_detector[detect_name] = []
 
-        by_detector[detect_name] += [detect_name, fov, num_tiles]
+        by_detector[detect_name] += [detect_display_name_dict[detector_id], fov, num_tiles]
         total_tiles += num_tiles
 
     for row in pix_by_detector_result:
@@ -228,7 +251,9 @@ def build_teglon_perf_table(gw_id, healpix_dir, healpix_file, telescope_ids_to_i
         detect_2D = float(row[1])
         detect_4D = float(row[2])
         boost = detect_4D/detect_2D
-        by_detector[detect_name] += [detect_2D, detect_4D, boost]
+
+        if detect_name in by_detector:
+            by_detector[detect_name] += [detect_2D, detect_4D, boost]
 
     total_2D = 0.0
     total_4D = 0.0
@@ -258,13 +283,15 @@ def build_teglon_perf_table(gw_id, healpix_dir, healpix_file, telescope_ids_to_i
             \\colhead{FOV} & 
             \\colhead{\# of Images} & 
             \\colhead{Total 2D Probability} & 
-            \\colhead{Total Resampled Probability} & 
-            \\colhead{Efficiency Increase} & \\\\
+            \\colhead{Total Redistributed Probability\\tablenotemark{\\footnotesize a}} & 
+            \\colhead{Efficiency Increase} & \\\\ [-0.45cm]
             &
             (deg$^{2}$) &
-            &
-            (\%) &
-            (\%) & 
+            & 
+            \\sum_{i}\\ptDi(\\%) &
+            \\sum_{i}\\ppptDi(\\%) & 
+            \\eta\\equiv\\sum_{i}\\frac{\\ppptDi}{\\ptDi} &
+            \\\\ [-0.75cm]
             }
             \\startdata''', file=fout)
 
@@ -282,12 +309,14 @@ def build_teglon_perf_table(gw_id, healpix_dir, healpix_file, telescope_ids_to_i
                 # Swope & 0.25 & 204 & 0.58 & 1.87 \\
                 print("%s & %0.4f & %s & %0.2f & %0.2f & %0.2f \\\\" % (detect_name, fov, num, _2d, _4d, boost), file=fout)
             else:
-                print("{\\bf %s} & {\\bf %0.0f}\\tablenotemark{\\footnotesize a} & {\\bf %s} & {\\bf %0.2f} & {\\bf %0.2f} & {\\bf %0.2f} \\\\" %
+                print("\\hline", file=fout)
+                print("{\\bf %s} & {\\bf %0.0f}\\tablenotemark{\\footnotesize b} & {\\bf %s} & {\\bf %0.2f} & {\\bf %0.2f} & {\\bf %0.2f} \\\\" %
                       (detect_name, fov, num, _2d, _4d, boost), file=fout)
 
         print('''\\enddata
-        \\tablecomments{}
-        \\tablenotetext{a}{Total unique area covered by all observations.}
+        \\tablecomments{A synopsis of \\teglon's effect on the community's combined EM search campaign for GW190425. \\teglon~strongly enhances $\\eta$ for instruments with FOVs $\\leq1.0$~deg$^{2}$, see Section \\ref{sec:teglon_0425}.}
+        \\tablenotetext{a}{See Appendix \\ref{app:teglon} for a full description.}
+        \\tablenotetext{b}{Total unique area covered by all observations.}
         \end{deluxetable*}''', file=fout)
 
 

@@ -28,8 +28,8 @@ start = time.time()
 
 
 
-plot_2D = False
-plot_4D = True
+plot_2D = True
+plot_4D = False
 plot_sun = True
 plot_mwe = True
 
@@ -153,21 +153,28 @@ else:
     fig, ax = plt.subplots(1, 1, subplot_kw={'projection': 'astro hours mollweide'}, figsize=(8,8), dpi=600)
 
 # ax.grid(color='gray', linestyle=':', linewidth=0.15)
-ax.grid(color='silver', linestyle=':', linewidth=0.15)
+ax.grid(color='silver', linestyle=':', linewidth=0.6,
+        path_effects=[path_effects.withStroke(linewidth=0.8, foreground='black', alpha=1.0)])
 
 
 global_alpha = 1.0
 
 if plot_2D or plot_4D:
+    contour_fmt_dict = {
+        0.5: "50%",
+        0.9: "90%"
+    }
 
     class ScalarFormatterClass(ScalarFormatter):
         def _set_format(self):
             self.format = "%1.1f"
     cbformat = ScalarFormatterClass()  # create the formatter
 
-    ax.contour_hpx(_90_50_levels_2d, colors=['None', 'white', 'white'], levels=[0.0, 0.5, 0.9],
+    _2d_contours = ax.contour_hpx(_90_50_levels_2d, colors=['None', 'white', 'white'], levels=[0.0, 0.5, 0.9],
                    linewidths=0.25, alpha=1.0,
                    path_effects=[path_effects.withStroke(linewidth=0.75, foreground='black')])
+    # clbls = ax.clabel(_2d_contours, inline=True, fontsize=6, fmt=contour_fmt_dict, inline_spacing=10.0)
+
     norm = None
     tks = None
 

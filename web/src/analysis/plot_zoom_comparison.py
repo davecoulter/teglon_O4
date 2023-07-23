@@ -33,7 +33,9 @@ plot_contour = True
 plot_mwe = True
 plot_sun = True
 plot_pix = True
+all_sky_colorbar = True
 is_debug = False
+
 
 
 class ScalarFormatterClass(ScalarFormatter):
@@ -52,12 +54,17 @@ central_coord = coord.SkyCoord(245.0, 20.0, unit=(u.deg, u.deg))
 
 fig = plt.figure(figsize=(8, 8), dpi=600)
 axes = {
-    '2D': fig.add_subplot(223, projection='astro degrees zoom',
-                          center='%sd %sd' % (central_coord.ra.deg, central_coord.dec.deg), radius='12 deg'),
-    '4D': fig.add_subplot(224, projection='astro degrees zoom',
-                          center='%sd %sd' % (central_coord.ra.deg, central_coord.dec.deg), radius='12 deg'),
-    "all_sky": plt.axes([0.1855, 0.28, 0.65, 0.65], projection='astro hours mollweide')
+        '2D': fig.add_subplot(223, projection='astro degrees zoom',
+                              center='%sd %sd' % (central_coord.ra.deg, central_coord.dec.deg), radius='12 deg'),
+        '4D': fig.add_subplot(224, projection='astro degrees zoom',
+                              center='%sd %sd' % (central_coord.ra.deg, central_coord.dec.deg), radius='12 deg')
 }
+if all_sky_colorbar:
+    axes["all_sky"] = plt.axes([0.1855, 0.28, 0.65, 0.65], projection='astro hours mollweide')
+else:
+    axes["all_sky"] = plt.axes([0.1855, 0.31, 0.65, 0.65], projection='astro hours mollweide')
+
+
 plt.rcParams["axes.axisbelow"] = False
 
 for ax_name, ax in axes.items():
@@ -180,16 +187,18 @@ lat = axes["all_sky"].coords[1]
 lon.set_ticklabel(color='silver', size=12,
                   path_effects=[path_effects.withStroke(linewidth=0.75, foreground='black')], zorder=9999)
 lat.set_ticklabel(color='black', size=12, zorder=9999)
-sm = plt.cm.ScalarMappable(norm=norm, cmap=plt.cm.inferno)
-sm.set_array([])  # can be an empty list
-cb = fig.colorbar(sm, ax=axes["all_sky"], ticks=tks, orientation='horizontal',
-                  fraction=0.08951, pad=0.08, alpha=0.80,
-                  aspect=40, format=cbformat,
-                  location='top')
-cb.set_label("% per Pixel", fontsize=14, labelpad=4.0)
-cb.outline.set_linewidth(1.0)
+if all_sky_colorbar:
+    sm = plt.cm.ScalarMappable(norm=norm, cmap=plt.cm.inferno)
+    sm.set_array([])  # can be an empty list
+    cb = fig.colorbar(sm, ax=axes["all_sky"], ticks=tks, orientation='horizontal',
+                      fraction=0.08951, pad=0.08, alpha=0.80,
+                      aspect=40, format=cbformat,
+                      location='top')
+
+    cb.set_label("% per Pixel", fontsize=14, labelpad=4.0)
+    cb.outline.set_linewidth(1.0)
 axes["all_sky"].set_ylabel(r'$\mathrm{Declination}$', fontsize=16, labelpad=0.5)
-axes["all_sky"].set_xlabel(r'$\mathrm{Right\;Ascension}$', fontsize=16, labelpad=-8.5, )
+axes["all_sky"].set_xlabel(r'$\mathrm{Right\;Ascension}$', fontsize=16, labelpad=-8.5)
 
 axes["all_sky"].mark_inset_axes(axes["2D"], path_effects=[path_effects.withStroke(linewidth=1.5, foreground='white',
                                                                                  alpha=1.0)])
@@ -251,6 +260,8 @@ if plot_sun:
     deg_sep = np.asarray([sp.deg for sp in sun_separations])
 
     twi18 = axes["all_sky"].contour_hpx(deg_sep, colors='gold', levels=[0, 45.0], alpha=1.0, linewidths=0.35)
+    axes["all_sky"].contourf_hpx(deg_sep, colors='cornsilk', levels=[0, 45.0], linewidths=0.2, alpha=0.25)  # alpha=0.25
+
     axes["all_sky"].plot(sun_coord.ra.degree, sun_coord.dec.degree, transform=axes["all_sky"].get_transform('world'),
                          marker="o", markersize=8,
             markeredgecolor="darkorange", markerfacecolor="gold", linewidth=0.05)
@@ -269,7 +280,7 @@ if plot_sun:
 
 
 
-def plot_pixels_within_radius(ax, allowed_pix_indices, pixel_collection, is_log):
+def plot_pixels_within_radius(ax, allowed_pix_indices, pixel_collection, is_log, label_text):
 
     pix_to_plot = []
 
@@ -316,7 +327,7 @@ def plot_pixels_within_radius(ax, allowed_pix_indices, pixel_collection, is_log)
                       fraction=0.025, pad=0.15, alpha=1.0,
                       aspect=38,
                       format=cbformat)
-    cb.set_label("2D % per Pixel", labelpad=4.0) # fontsize=14,
+    cb.set_label(label_text, labelpad=4.0) # fontsize=14,
     cb.outline.set_linewidth(1.0)
 
     for i, p in enumerate(pix_to_plot):
@@ -352,8 +363,8 @@ in_window_pix_index = np.where(seps < radius)
 allowed_pix = all_sky_pix_indices[in_window_pix_index]
 
 if plot_pix:
-    plot_pixels_within_radius(axes['2D'], allowed_pix, _2D_pix_dict, is_log=False)
-    plot_pixels_within_radius(axes['4D'], allowed_pix, _4D_pix_dict, is_log=False)
+    plot_pixels_within_radius(axes['2D'], allowed_pix, _2D_pix_dict, is_log=False, label_text='Original % Per Pixel')
+    plot_pixels_within_radius(axes['4D'], allowed_pix, _4D_pix_dict, is_log=False, label_text='Resampled % Per Pixel')
 
 output_file = "S190425_figure_4.png"
 output_path = "./web/src/analysis/%s" % output_file
