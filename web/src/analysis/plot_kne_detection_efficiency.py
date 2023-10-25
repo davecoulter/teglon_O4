@@ -49,7 +49,7 @@ G_CGS = c.G.cgs.value
 R_NS_CGS = 20e5  # NS radius cm == 20 km
 
 is_log = False
-blue_kn = True  # else, red_kn
+blue_kn = False  # else, red_kn
 is_poster_plot = False
 
 is_Ye_0_05 = False
@@ -105,8 +105,32 @@ model_tups = []
 #         if y == ye_thresh:
 #             model_tups.append((vej[j], mej[j], prob[j]))
 
-red_kn_props = (0.15, 0.035, 0.1)
-blue_kn_props = (0.25, 0.025, 0.45)  # vej, mej, ye
+# 0817 + 0425 props
+# red_kn_props = (0.15, 0.035, 0.1)
+# blue_kn_props = (0.25, 0.025, 0.45)  # vej, mej, ye
+
+
+
+# # Debug - low velocity, high mass
+# blue_kn_props = (0.1, 0.3, 0.45)  # vej, mej, ye
+# # Debug - low velocity, low mass
+# blue_kn_props = (0.1, 0.1, 0.45)  # vej, mej, ye
+# # Debug - high velocity, high mass
+# blue_kn_props = (0.3, 0.3, 0.45)  # vej, mej, ye
+# # Debug - high velocity, low mass
+# blue_kn_props = (0.3, 0.1, 0.45)  # vej, mej, ye
+#
+# # Debug - low velocity, high mass
+# red_kn_props = (0.1, 0.3, 0.1)  # vej, mej, ye
+# # Debug - low velocity, low mass
+# red_kn_props = (0.1, 0.1, 0.1)  # vej, mej, ye
+# # Debug - high velocity, high mass
+# red_kn_props = (0.3, 0.3, 0.1)  # vej, mej, ye
+# Debug - high velocity, low mass
+red_kn_props = (0.3, 0.1, 0.1)  # vej, mej, ye
+
+
+
 closest_blue_sep = 9999
 closest_red_sep = 9999
 closest_blue = None
@@ -176,6 +200,10 @@ else:
     print(closest_sub_dir)
 
 print("Done reading in data... %s rows" % len((model_tups)))
+
+# Debug exit
+raise Exception("Stop!")
+
 
 all_vej = np.asarray([mt[0] for mt in model_tups])
 all_mej = np.asarray([mt[1] for mt in model_tups])

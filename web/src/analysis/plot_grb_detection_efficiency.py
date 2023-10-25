@@ -141,6 +141,9 @@ for E in Sorted_E:
 arr_len = 100
 model_E_input = np.logspace(np.min(np.log10(E_keys)) + 0.000001, np.max(np.log10(E_keys)) - 0.000001, arr_len)
 model_n_input = np.logspace(np.min(np.log10(all_n)), np.max(np.log10(all_n)), arr_len)
+print("Range in n: %s, %s" % (np.min(all_n), np.max(all_n)))
+print("Range in E: %s, %s" % (np.min(E_keys), np.max(E_keys)))
+
 
 # Interpolate rows
 Interp_E_prob = OrderedDict()
@@ -197,7 +200,7 @@ print("min/max prob from files: %s, %s" % (np.min(Z), np.max(Z)))
 
 # INTERPOLATE IN LOGSPACE
 _2d_func = interp2d(np.log10(X), np.log10(Y), Z, kind="linear")
-
+# min_plot_prob = _2d_func(min(X), min(Y))
 # GET INTERPOLATED VALUES IN LOGSPACE
 z_new = _2d_func(np.log10(model_n_input), np.log10(model_E_input))
 
@@ -236,7 +239,10 @@ max_prob = max_prob_orig
 
 # Convert to percent for colorbar...
 norm = colors.LogNorm(min_prob_orig * 100, max_prob_orig * 100)
+# test_norm = colors.LogNorm(min_plot_prob, max_prob_orig)
+# norm = colors.LogNorm(min_plot_prob * 100, max_prob_orig * 100)
 tks = np.logspace(np.log10(min_prob_orig * 100), np.log10(max_prob_orig * 100), 4)
+# tks = np.logspace(np.log10(min_plot_prob[0] * 100), np.log10(max_prob_orig * 100), 4)
 print(tks)
 
 fig = plt.figure(figsize=(10,10), dpi=600)
@@ -245,15 +251,50 @@ ax = fig.add_subplot(111)
 
 print("plotting...")
 
-
-# DATA GRID IN LINEAR SPACE (PLOT AXES WILL BE LOG SCALED)
 xx, yy = np.meshgrid(model_n_input, model_E_input)
 test = ndimage.gaussian_filter(z_new, sigma=1.0, order=0)
-from matplotlib import ticker
-CS_filled = ax.contourf(xx, yy, test, cmap=plt.cm.inferno, locator=ticker.LogLocator(),
-                        levels=np.logspace(np.log10(min_prob), np.log10(max_prob), 1000))
-                        # , levels=np.logspace(np.log10(min_prob), np.log10(max_prob), 1000))
-# CS_filled = ax.contourf(xx, yy, test, cmap=plt.cm.viridis, levels=np.logspace(np.log10(min_prob), np.log10(max_prob), 200))
+
+
+# DEBUG
+do_squares = False
+do_no_interp = True
+do_1D_interp = False
+
+if do_squares:
+    if do_no_interp:
+
+        for E in Sorted_E:
+            n = Sorted_E_n[E]
+            p = prob_rows[E]
+
+            for i in range(len(n)):
+                n_i = n[i]
+                p_i = p[i]
+                clr = plt.cm.inferno(norm(p_i * 100))
+                ax.plot(n_i, E, 's', color=clr, markeredgecolor=clr, markersize=17.5)
+
+
+    else:
+        if do_1D_interp:
+            for i, n in enumerate(model_n_input):
+                n_probs = Interp_n_prob[n]
+                for j, prob in enumerate(n_probs):
+                    clr = plt.cm.inferno(norm(prob * 100))
+                    ax.plot(n, model_E_input[j], 's', color=clr, markeredgecolor=clr, markersize=17.5)
+        else: # use 2D interp
+            for n in model_n_input:
+                for E in model_E_input:
+                    p = _2d_func(n, E)
+                    clr = plt.cm.inferno(norm(p * 100))
+                    ax.plot(n, E, 's', color=clr, markeredgecolor=clr, markersize=17.5)
+else:
+    print("plotting contours with 2D interpolation")
+    # DATA GRID IN LINEAR SPACE (PLOT AXES WILL BE LOG SCALED)
+    from matplotlib import ticker
+    CS_filled = ax.contourf(xx, yy, test, cmap=plt.cm.inferno, locator=ticker.LogLocator(),
+                            levels=np.logspace(np.log10(min_prob), np.log10(max_prob), 1000))
+                            # , levels=np.logspace(np.log10(min_prob), np.log10(max_prob), 1000))
+    # CS_filled = ax.contourf(xx, yy, test, cmap=plt.cm.viridis, levels=np.logspace(np.log10(min_prob), np.log10(max_prob), 200))
 
 
 if grb_axis == "onaxis":
@@ -274,7 +315,7 @@ if grb_axis == "onaxis":
     # 0425
     fmt_dict = {
         0.0: "",
-        0.10: "10%",
+        0.10: "10%"
     }
     clbls90 = ax.clabel(CS_lines90, inline=True, fontsize=24, fmt=fmt_dict)  # inline_spacing=130,
     plt.setp(clbls90, path_effects=[path_effects.withStroke(linewidth=3.0, foreground='black')], zorder=9900)
@@ -509,17 +550,27 @@ print("min/max prob: %s, %s" % (min_prob, max_prob))
 
 
 # [1.87613862e-06 4.63174163e-04 1.14346724e-01 2.82294963e+01] # in percent
-tks_strings_on_axis = [
-    "0%",
-    "5e-4%",
-    "0.1%",
-    "28%",
-    # "0.0",
-    # "4.6e-6",
-    # "1.1e-3",
-    # "0.28",
+# tks_strings_on_axis = [
+#     "0%",
+#     "5e-4%",
+#     "0.1%",
+#     "28%",
+#     # "0.0",
+#     # "4.6e-6",
+#     # "1.1e-3",
+#     # "0.28",
+#
+# ]
 
-]
+#
+# tks_strings_on_axis = [
+#     "0%",
+#     "0.4%",
+#     "3.2%",
+#     "28%"
+# ]
+
+tks_strings_on_axis = ["%s" % tk for tk in tks]
 
 cb = fig.colorbar(sm, ax=ax, orientation='vertical', fraction=0.05, pad=0.02) #, alpha=0.80 , format=cbformat
 cb.set_ticks(tks)
@@ -527,6 +578,9 @@ cb.ax.tick_params(length=6.0, labelsize=24) # width=2.0,
 
 if grb_axis == "onaxis":
     cb.ax.set_yticklabels(tks_strings_on_axis, fontsize=24)
+    # 2D Interpolation is on the LOGARITHM of the input...
+    detect_prob = _2d_func(np.log10(GRB170817A_n), np.log10(GRB170817A_E_k_iso_FOE))
+    print("detect of on-axis: %s" % detect_prob)
 # else:
 #     cb.ax.set_yticklabels(tks_strings_off_axis, fontsize=24)
 
@@ -696,7 +750,6 @@ if do_debug:
 
 
     fig.savefig('./web/events/S190425z/model_detection/190814_GRB_test_%s.png' % grb_axis, bbox_inches='tight')
-
 
 
 

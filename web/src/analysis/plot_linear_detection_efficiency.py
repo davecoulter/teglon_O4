@@ -335,7 +335,7 @@ ax.text(0.135, -16.06, "AT 2017gfo", fontsize=20, zorder=9999, color="white" #ha
             , path_effects = [path_effects.withStroke(linewidth=10.0, foreground='black')])
 # )
 # ax.plot(0.690769300139, -16.1218, '*', color='black', markeredgecolor='black',
-ax.plot(0.690769300139, -16.1218, '*', color='black', markeredgecolor='black',
+ax.plot(0.690769300139,     -16.1218, '*', color='black', markeredgecolor='black',
         markersize=mkr_sz, mew=_mew) #markeredgecolor="black" , alpha=0.25
 print("Prob of Kasen model for SSS17a, r-band: %s" % _2d_func(0.690769300139, -16.1218))
 

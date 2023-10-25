@@ -35,6 +35,7 @@ def build_latex_table(gw_id, healpix_dir, healpix_file, telescope_ids_to_include
             OT.RA,
             OT._Dec,
             B.`Name`,
+            OT.Exp_Time,
             OT.MJD,
             OT.Mag_Lim
         FROM
@@ -45,17 +46,17 @@ def build_latex_table(gw_id, healpix_dir, healpix_file, telescope_ids_to_include
             OT.HealpixMap_id = %s AND
             D.id IN (%s)
         ORDER BY
-            D.Area
-        DESC;
+            D.Name, OT.MJD
+        ASC;
     '''
     tile_result = query_db([select_tiles % (healpix_map_id, telescope_ids_to_include)])[0]
 
     abbreviation_lookup = {
-        "SWOPE":"S",
-        "ANDICAM-CCD":"A-CCD",
-        "THACHER": "T",
-        "NICKEL": "N",
-        "ANDICAM-IR": "A-IR",
+        "SWOPE":"Swope",
+        "ANDICAM-CCD":"ANDICAM CCD",
+        "THACHER": "Thacher",
+        "NICKEL": "Nickel",
+        "ANDICAM-IR": "ANDICAM IR",
         # "MOSFIRE": "M",
         "SDSS u": "u",
         "SDSS g": "g",
@@ -74,20 +75,22 @@ def build_latex_table(gw_id, healpix_dir, healpix_file, telescope_ids_to_include
     with open(output_file, 'w') as fout:
         print('''\\startlongtable
         \\begin{deluxetable}
-        {lccccc}
+        {lcccccc}
         \\tabletypesize{\\scriptsize}
-        \\tablecaption{1M2H Optical/IR Imaging of the GW190425 Localization Region\\label{tab:observations}}
+        \\tablecaption{1M2H UVOIR Imaging of the GW190425 Localization Region\\label{tab:observations}}
         \\tablewidth{0pt}
         \\tablehead{
         \\colhead{Source\\tablenotemark{\\footnotesize a}} & 
         \\colhead{$\\alpha$} & 
         \\colhead{$\\delta$} & 
-        \\colhead{Date} &
+        \\colhead{Exposure Time} &
+        \\colhead{Date\\tablenotemark{\\footnotesize b}} &
         \\colhead{Filter} &
-        \\colhead{Magnitude Limit\\tablenotemark{\\footnotesize b}} \\\\
+        \\colhead{Magnitude Limit\\tablenotemark{\\footnotesize c}} \\\\
         &
         (J2000) &
         (J2000) &
+        (s) &
         (MJD) &
         &
         (3$\\sigma$)
@@ -104,22 +107,27 @@ def build_latex_table(gw_id, healpix_dir, healpix_file, telescope_ids_to_include
                                                                                              sep=":",
                                                                                              precision=2).split(" ")
             filter_name = abbreviation_lookup[tile[4]]
-            mjd = tile[5]
-            lim_mag = float(tile[6])
+            exp_time = float(tile[5])
+            mjd = float(tile[6])
+            lim_mag = float(tile[7])
 
             line_terminator = ""
             if row_num < num_rows:
                 line_terminator = "\\\\"
 
-            # S & 01:27:55.560 & -34:41:50.280 & 58715.2170 & $r$ & 20.64 \\
-            print("%s & %s & %s & %0.4f & $%s$ & %0.2f %s" % (detector_name, ra_str, dec_str, mjd, filter_name,
-                                                                lim_mag, line_terminator), file=fout)
+            # S & 01:27:55.560 & -34:41:50.280 & 900 & 58715.2170 & $r$ & 20.64 \\
+            print("%s & %s & %s & %0.0f & %0.4f & $%s$ & %0.2f %s" % (detector_name, ra_str, dec_str, exp_time, mjd,
+                                                                      filter_name, lim_mag, line_terminator), file=fout)
         print('''\\enddata
         
     \\tablecomments{We only include data that 1M2H acquired and reduced. For LCO data referred to in \\autoref{sec:data}, these data will be published in \\lcogtpub. For all other data, see the curated pointings on the Treasure Map \\citep{Wyatt20}.}
-    \\tablenotetext{a}{Surveys correspond to Swope (S), Thacher (T), Nickel (N), ANDICAM-CCD (A-CCD), and ANDICAM-IR (A-IR). Imaging as described in \\autoref{sec:data}.}
-    \\tablenotetext{b}{In-band 3$\\sigma$ limit for the reported image as described in \\autoref{sec:data} and \\autoref{sec:model_comparison}. All magnitudes are on the AB system \\citep{Oke83}.}
+    \\tablenotetext{a}{Imaging as described in \\autoref{sec:data}.}
+    \\tablenotetext{b}{MJD is taken from the center of the exposure time.}
+    \\tablenotetext{c}{In-band 3$\\sigma$ limit for the reported image as described in \\autoref{sec:data} and \\autoref{sec:model_comparison}. All magnitudes are on the AB system \\citep{Oke83}.}
     \\end{deluxetable}''', file=fout)
+
+# %\tablecomments{We only include data that 1M2H and KAIT acquired and reduced. For LCO data referred to in \autoref{sec:data},
+# these data will be published in \lcogtpub. For all other data, see the curated pointings on the Treasure Map \citep{Wyatt20}.}
 
 def build_teglon_perf_table(gw_id, healpix_dir, healpix_file, telescope_ids_to_include):
     detect_display_name_dict = {
