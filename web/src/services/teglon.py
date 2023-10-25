@@ -715,38 +715,42 @@ class Teglon:
                                 linewidth=0.05, alpha=1.0, zorder=9999)
 
             # Sun Contours
-            observatory = Observer(location=detector_geography[detector_name])
-            sun_set = observatory.sun_set_time(time_of_trigger, which='nearest', horizon=-18 * u.deg)
-            sun_rise = observatory.sun_rise_time(sun_set, which='next', horizon=-18 * u.deg)
-            sun_coord = get_sun(sun_set)
-            hours_of_the_night = int((sun_rise - sun_set).to_value('hr'))
-            time_next = sun_set
+            try:
+                observatory = Observer(location=detector_geography[detector_name])
+                sun_set = observatory.sun_set_time(time_of_trigger, which='nearest', horizon=-18 * u.deg)
+                sun_rise = observatory.sun_rise_time(sun_set, which='next', horizon=-18 * u.deg)
+                sun_coord = get_sun(sun_set)
+                hours_of_the_night = int((sun_rise - sun_set).to_value('hr'))
+                time_next = sun_set
 
-            sun_separations = sun_coord.separation(all_sky_coords)
-            deg_sep = np.asarray([sp.deg for sp in sun_separations])
+                sun_separations = sun_coord.separation(all_sky_coords)
+                deg_sep = np.asarray([sp.deg for sp in sun_separations])
 
-            plot_axes[detector_name].contour_hpx(deg_sep, colors='darkorange', levels=[0, 60.0], alpha=0.5,
-                                                 linewidths=0.2)
-            plot_axes[detector_name].contourf_hpx(deg_sep, colors='gold', levels=[0, 60.0], linewidths=0.2, alpha=0.3)
-            plot_axes[detector_name].plot(sun_coord.ra.degree, sun_coord.dec.degree,
-                                          transform=plot_axes[detector_name].get_transform('world'), marker="o",
-                                          markersize=8, markeredgecolor="darkorange", markerfacecolor="gold",
-                                          linewidth=0.05)
+                plot_axes[detector_name].contour_hpx(deg_sep, colors='darkorange', levels=[0, 60.0], alpha=0.5,
+                                                     linewidths=0.2)
+                plot_axes[detector_name].contourf_hpx(deg_sep, colors='gold', levels=[0, 60.0], linewidths=0.2, alpha=0.3)
+                plot_axes[detector_name].plot(sun_coord.ra.degree, sun_coord.dec.degree,
+                                              transform=plot_axes[detector_name].get_transform('world'), marker="o",
+                                              markersize=8, markeredgecolor="darkorange", markerfacecolor="gold",
+                                              linewidth=0.05)
 
-            # Airmass constraints
-            net_airmass = all_sky_coords.transform_to(
-                AltAz(obstime=sun_set, location=detector_geography[detector_name])).secz
-            for i in np.arange(hours_of_the_night):
-                time_next += timedelta(1 / 24.)
-                temp = all_sky_coords.transform_to(
-                    AltAz(obstime=time_next, location=detector_geography[detector_name])).secz
-                temp_index = np.where((temp >= 1.0) & (temp <= 2.0))
-                net_airmass[temp_index] = 1.5
+                # Airmass constraints
+                net_airmass = all_sky_coords.transform_to(
+                    AltAz(obstime=sun_set, location=detector_geography[detector_name])).secz
+                for i in np.arange(hours_of_the_night):
+                    time_next += timedelta(1 / 24.)
+                    temp = all_sky_coords.transform_to(
+                        AltAz(obstime=time_next, location=detector_geography[detector_name])).secz
+                    temp_index = np.where((temp >= 1.0) & (temp <= 2.0))
+                    net_airmass[temp_index] = 1.5
 
-            plot_axes[detector_name].contourf_hpx(net_airmass, colors='gray', levels=[np.min(net_airmass), 1.0],
-                                                  linewidths=0.2, alpha=0.3)
-            plot_axes[detector_name].contourf_hpx(net_airmass, colors='gray', levels=[2.0, np.max(net_airmass)],
-                                                  linewidths=0.2, alpha=0.3)
+                plot_axes[detector_name].contourf_hpx(net_airmass, colors='gray', levels=[np.min(net_airmass), 1.0],
+                                                      linewidths=0.2, alpha=0.3)
+                plot_axes[detector_name].contourf_hpx(net_airmass, colors='gray', levels=[2.0, np.max(net_airmass)],
+                                                      linewidths=0.2, alpha=0.3)
+            except Exception as e:
+                print("Failure in astroplan! Exception: %s" % e)
+                print("\n****** Proceeding without Sun Contours! *******\n")
 
         output_file = "all_telescopes_4D_0.9_%s.svg" % healpix_file
         if not plot_all:
