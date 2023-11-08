@@ -8,7 +8,7 @@ import numpy as np
 from astropy import units as u
 import astropy.coordinates as coord
 import healpy as hp
-
+import pprint
 from astropy.table import Table
 from astropy.io import ascii
 
@@ -39,56 +39,12 @@ class Teglon:
 
         parser.add_option('--tile_file', default="", type="str", help='File that contains the tile observations.')
 
-        # parser.add_option('--tele', default="", type="str",
-        #                   help='Telescope abbreviation that `tile_file` corresponds to.')
-
-        # parser.add_option('--coord_format', default="hour", type="str",
-        #                   help='What format the sky coordinates are in. Available: "hour" or "deg". Default: "hour".')
-
         return (parser)
 
     def main(self):
 
         utilities_base_dir = "/app/web/src/utilities"
         pickle_output_dir = "%s/pickles/" % utilities_base_dir
-
-        # HOUR_FORMAT = "hour"
-        # DEG_FORMAT = "deg"
-
-        # Band abbreviation, band_id mapping
-        # band_mapping = {
-        #     "u": "SDSS u",
-        #     "g": "SDSS g",
-        #     "r": "SDSS r",
-        #     "i": "SDSS i",
-        #     "z": "SDSS z",
-        #     "B": "Landolt B",
-        #     "V": "Landolt V",
-        #     "R": "Landolt R",
-        #     "I": "Landolt I",
-        #     "J": "UKIRT J",
-        #     "H": "UKIRT H",
-        #     "K": "UKIRT K",
-        #     "Clear": "Clear",
-        #     "open": "Clear"
-        # }
-
-        # detector_mapping = {
-        #     "s": "SWOPE",
-        #     "t": "THACHER",
-        #     "a": "ANDICAM",
-        #     "n": "NICKEL",
-        #     "m": "MOSFIRE",
-        #     "k": "KAIT",
-        #     "si": "SINISTRO",
-        #     "w": "WISE",
-        #     "gt4": "GOTO-4",
-        #     "css": "MLS10KCCD-CSS",
-        #     "sw": "Swift/UVOT",
-        #     "mmt": "MMTCam",
-        #     "z": "ZTF",
-        # }
-
         is_error = False
 
         # Parameter checks
@@ -103,14 +59,6 @@ class Teglon:
         if self.options.tile_file == "":
             is_error = True
             print("Tile file is required.")
-
-        # if self.options.tele == "":
-        #     is_error = True
-        #     print("Telescope abbreviation is required.")
-
-        # if self.options.coord_format != HOUR_FORMAT and self.options.coord_format != DEG_FORMAT:
-        #     is_error = True
-        #     print("Incorrect `coord_format`!")
 
         if is_error:
             print("Exiting...")
@@ -135,10 +83,6 @@ class Teglon:
         if not os.path.exists(tile_path):
             is_error = True
             print("Tile file `%s` does not exist." % tile_path)
-
-        # if self.options.tele not in detector_mapping:
-        #     is_error = True
-        #     print("Unknown telescope abbreviation: %s " % self.options.tele)
 
         if is_error:
             print("Exiting...")
@@ -178,8 +122,9 @@ class Teglon:
         band_select = "SELECT id, Name, F99_Coefficient FROM Band WHERE `Name`='%s'"
         detector_select_by_name = "SELECT id, Name, Deg_width, Deg_height, Deg_radius, Area, MinDec, MaxDec, ST_AsText(Poly) FROM Detector WHERE Name='%s'"
 
-        obs_tile_insert_data = []
-        detectors = {}
+        duplicate_tile_data = []
+        obs_tile_insert_data = {}
+        # detectors = {}
 
         input_table = ascii.read(tile_path, delimiter=' ')
         input_detector_name = input_table.meta["comments"]["detector_name"]
@@ -188,9 +133,6 @@ class Teglon:
         detector_name = detector_result[1]
         detector_poly = Detector.get_detector_vertices_from_teglon_db(detector_result[8])
         detector = Detector(detector_name, detector_poly, detector_id=int(detector_result[0]))
-        # detector = Detector(detector_result[1], float(detector_result[2]), float(detector_result[2]))
-        # detector.id = int(detector_result[0])
-        # detector.area = float(detector_result[5])
 
         filter_select = '''
             SELECT `Name`, id FROM Band;
@@ -198,10 +140,28 @@ class Teglon:
         filter_result = query_db([filter_select])[0]
         filter_lookup = {br[0]: int(br[1]) for br in filter_result}
 
-
-        if detector.name not in detectors:
-            detectors[detector.name] = detector
         print("Processing `%s` for %s" % (tile_path, detector.name))
+
+
+        # Sanity checks:
+        #   0. Check for duplication: What defines the tile being the same:
+        #       (Detector_id, MJD, Filter, N128_SkyPixel_id)
+        #       While exp time, mag lim, etc might be different, there's no legitimate way for the same detector to
+        #       take > 1 "r-band" image at the exact same.
+        #   1. Check for duplication within the db. This preempts duplication within the payload.
+        #   2. Check for duplication within the payload.
+        #   3. Only upload tile-pixel relations for uploaded tiles (vs all tiles in the db)
+
+        select_existing = '''
+            SELECT 
+                COUNT(*)
+            FROM ObservedTile 
+            WHERE
+                Detector_id = %s AND
+                MJD = %s AND
+                Band_Id = %s AND
+                N128_SkyPixel_id = %s 
+        '''
 
         for row in input_table:
 
@@ -210,9 +170,6 @@ class Teglon:
             ra = row['ra']
             dec = row['dec']
 
-            # theta = 0.5 * np.pi - np.deg2rad(dec)
-            # phi = np.deg2rad(ra)
-            # n128_pix_index = hp.ang2pix(128, theta, phi)
             n128_pix_index = hp.ang2pix(128, ra, dec, lonlat=True)
             tile_ebv = ebv[n128_pix_index]
             n128_id = N128_dict[n128_pix_index]
@@ -224,6 +181,27 @@ class Teglon:
             exp_time = row['exp_time']
             mag_lim = row['mag_lim']
             position_angle = row['position_angle']
+
+            # 1. db check
+            error_msg = "\tDuplicate Tile! (Detector: %s, MJD: %s, Filter_id: %s, N128_id: %s)" % (detector.id, mjd,
+                                                                                                 filter_id, n128_id) + \
+                        "\nSkipping! ***********\n"
+            unique_key = (detector.id, mjd, filter_id, n128_id)
+            already_exists = query_db([select_existing % unique_key])[0]
+            if len(already_exists) > 0 and already_exists[0][0] >= 1:
+                print("\n *********** Duplicated in DB: *********** ")
+                print(error_msg)
+                duplicate_tile_data.append(unique_key)
+                continue
+
+            # 2. payload check
+            if unique_key not in obs_tile_insert_data:
+                obs_tile_insert_data[unique_key] = None
+            else:
+                print("\n*********** Duplicate in Payload: *********** ")
+                print(error_msg)
+                duplicate_tile_data.append(unique_key)
+                continue
 
             x0 = row['x0']
             if np.isnan(x0):
@@ -251,7 +229,7 @@ class Teglon:
 
             t = Tile(ra, dec, detector, int(healpix_map_nside), position_angle_deg=position_angle)
 
-            obs_tile_insert_data.append((
+            obs_tile_insert_data[unique_key] = (
                 source,
                 detector.id,
                 field_name,
@@ -273,186 +251,10 @@ class Teglon:
                 a_err,
                 n,
                 n_err
-            ))
+            )
 
-
-        # # Iterate over lines of a tile
-        # with open(tile_path, 'r') as csvfile:
-        #     # Read CSV lines
-        #     csvreader = csv.reader(csvfile, delimiter=' ', skipinitialspace=True)
-        #     for row in csvreader:
-        #
-        #         # default PA. Overwrite below if provided
-        #         position_angle = 0.0
-        #
-        #         # Format 0425  - Swope, KAIT
-        #         file_name = row[0]
-        #         field_name = row[1]
-        #         ra = float(row[2])
-        #         dec = float(row[3])
-        #         mjd = float(row[4])
-        #         band = row[5].strip()
-        #         exp_time = float(row[6])
-        #         mag_lim = None
-        #         try:
-        #             mag_lim = float(row[7])
-        #         except:
-        #             pass
-        #
-        #         # # Format 0425  - Thacher, Nickel
-        #         # file_name = row[0]
-        #         # field_name = row[1]
-        #         # ra = float(row[2])
-        #         # dec = float(row[3])
-        #         # exp_time = float(row[4])
-        #         # mjd = float(row[5])
-        #         # band = row[6].strip()
-        #         # mag_lim = None
-        #         # try:
-        #         #     mag_lim = float(row[7])
-        #         # except:
-        #         #     pass
-        #
-        #         # # Format 0425 Treasure Map
-        #         # file_name = row[0]
-        #         # field_name = row[1]
-        #         # ra = float(row[2])
-        #         # dec = float(row[3])
-        #         # mjd = float(row[4])
-        #         # band = row[5].strip()
-        #         # exp_time = float(row[6])
-        #         # mag_lim = float(row[7])
-        #         # position_angle = float(row[8])
-        #
-        #         # # Format 0814 Swope, Nickel, Wise
-        #         # file_name = row[0]
-        #         # field_name = row[0]
-        #         # ra = float(row[1])
-        #         # dec = float(row[2])
-        #         # mjd = float(row[3])
-        #         # band = row[4].strip()
-        #         # exp_time = float(row[5])
-        #         # mag_lim = float(row[6])
-        #
-        #         # # Format 0814 Thacher
-        #         # file_name = row[0]
-        #         # field_name = row[1]
-        #         # ra = float(row[2])
-        #         # dec = float(row[3])
-        #         # mjd = float(row[4])
-        #         # band = row[5].strip()
-        #         # exp_time = float(row[6])
-        #         # mag_lim = float(row[7])
-        #
-        #         # Format 0814 MOSFIRE
-        #         # file_name = row[0]
-        #         # field_name = row[1]
-        #         # ra = float(row[2])
-        #         # dec = float(row[3])
-        #         # mjd = float(row[4])
-        #         # band = row[5].strip()
-        #         # exp_time = float(row[6])
-        #         # mag_lim = None
-        #
-        #         # # Format 0814 LCOGT, KAIT
-        #         # file_name = row[0]
-        #         # field_name = row[1]
-        #         # ra = float(row[2])
-        #         # dec = float(row[3])
-        #         # mjd = float(row[4])
-        #         # band = row[5].strip()
-        #         # exp_time = float(row[6])
-        #         # mag_lim = None
-        #         # try:
-        #         #     mag_lim = float(row[7])
-        #         # except:
-        #         #     pass
-        #
-        #
-        #         # mag_lim = None
-        #
-        #
-        #         # file_name = row[0]
-        #         # field_name = row[1]
-        #         # ra = float(row[2])
-        #         # dec = float(row[3])
-        #         # mjd = float(row[4])
-        #         # band = row[5].strip()
-        #         # exp_time = float(row[6])
-        #
-        #         # exp_time = float(row[4])
-        #         # mjd = float(row[5])
-        #         # band = row[6].strip()
-        #
-        #         # For ANDICAM, the filter is in the filename...
-        #         # if self.options.tele == "a" and band == "___":
-        #         #     band = file_name.split(".")[1]
-        #
-        #         # # KAIT data format
-        #         # ra = float(row[2])
-        #         # dec = float(row[3])
-        #         # mjd = float(row[4])
-        #         # band = row[5].strip()
-        #
-        #         # exp_time = None
-        #         # try:
-        #         #     exp_time = float(row[6])
-        #         #     if exp_time <= 0.0:
-        #         #         exp_time = None
-        #         # except:
-        #         #     pass
-        #
-        #
-        #         # mag_lim = None
-        #         # try:
-        #         #     mag_lim = float(row[7])
-        #         # except:
-        #         #     pass
-        #
-        #         # Get Band_id
-        #         band_map = band_mapping[band]
-        #         band_results = query_db([band_select % band_map])[0][0]
-        #
-        #         band_id = band_results[0]
-        #         band_name = band_results[1]
-        #         band_F99 = float(band_results[2])
-        #
-        #         dec_unit = u.hour
-        #         if self.options.coord_format == DEG_FORMAT:
-        #             dec_unit = u.deg
-        #         c = coord.SkyCoord(ra, dec, unit=(dec_unit, u.deg))
-        #
-        #         n128_index = hp.ang2pix(nside128, 0.5 * np.pi - c.dec.radian, c.ra.radian)  # theta, phi
-        #         n128_id = N128_dict[n128_index]
-        #
-        #         # t = Tile(c.ra.degree, c.dec.degree, detector.deg_width, detector.deg_height, int(healpix_map_nside))
-        #         t = Tile(c.ra.degree, c.dec.degree, detector, int(healpix_map_nside), position_angle_deg=position_angle)
-        #
-        #         t.field_name = field_name
-        #         t.N128_pixel_id = n128_id
-        #         t.N128_pixel_index = n128_index
-        #         t.mwe = ebv[n128_index] * band_F99
-        #         t.mjd = mjd
-        #         t.exp_time = exp_time
-        #         t.mag_lim = mag_lim
-        #
-        #         # observed_tiles.append(t)
-        #         obs_tile_insert_data.append((
-        #             file_name,
-        #             detector.id,
-        #             t.field_name,
-        #             t.ra_deg,
-        #             t.dec_deg,
-        #             "POINT(%s %s)" % (t.dec_deg, t.ra_deg - 180.0),  # Dec, RA order due to MySQL convention for lat/lon
-        #             t.query_polygon_string,
-        #             str(t.mwe),
-        #             t.N128_pixel_id,
-        #             band_id,
-        #             t.mjd,
-        #             t.exp_time,
-        #             t.mag_lim,
-        #             healpix_map_id,
-        #             t.position_angle_deg))
+        # Convert dictionary to list for db insert
+        insert_observed_tile_list = [value for key, value in obs_tile_insert_data.items()]
 
         insert_observed_tile = '''
             INSERT INTO
@@ -462,39 +264,51 @@ class Teglon:
             %s, %s, %s, %s, %s, %s, %s, %s)
         '''
 
-        print("Inserting %s tiles..." % len(obs_tile_insert_data))
-        batch_insert(insert_observed_tile, obs_tile_insert_data)
+        print("Inserting %s tiles..." % len(insert_observed_tile_list))
+        batch_insert(insert_observed_tile, insert_observed_tile_list)
         print("Done...")
 
+        # Only insert tile-pixel data for things just inserted!!!
+        select_inserted = '''
+            WITH NewINSERT AS (
+                SELECT id FROM ObservedTile ORDER BY id DESC LIMIT %s
+            )
+            SELECT id FROM NewINSERT ORDER BY id ASC;
+        '''
+        inserted_ids = query_db([select_inserted % len(insert_observed_tile_list)])[0]
+        # generate id list
+        id_list = ",".join([str(id[0]) for id in inserted_ids])
+
+        # 3. Only insert tile-pixel data if there were tiles inserted (previous bug would regen tile-pixel relations
+        #       for ALL existing tiles...
+        if len(insert_observed_tile_list) <= 0:
+            print("No tiles inserted! Exiting...")
+            return 0;
+
         # Associate map pixels with observed tiles
-        print("Building observed tile-healpix map pixel relation...")
+        print("Tiles inserted: Building observed tile-healpix map pixel relation...")
 
         obs_tile_select = '''
             SELECT `Source`, id, Detector_id, FieldName, RA, _Dec, Coord, Poly, EBV, N128_SkyPixel_id, Band_id, MJD, Exp_Time, Mag_Lim, HealpixMap_id, PositionAngle 
             FROM ObservedTile 
-            WHERE Detector_id = %s and HealpixMap_id = %s 
+            WHERE id IN (%s)
         '''
 
         # Obtain the tile with id's so they can be used in later INSERTs
         tile_pixel_data = []
-        for d_name, d in detectors.items():
-            obs_tiles_for_detector = query_db([obs_tile_select % (d.id, healpix_map_id)])[0]
+        obs_tiles_for_detector = query_db([obs_tile_select % id_list])[0]
+        for otfd in obs_tiles_for_detector:
 
-            print("Observed Tiles for %s: %s" % (d.name, len(obs_tiles_for_detector)))
-            for otfd in obs_tiles_for_detector:
+            ot_id = int(otfd[1])
+            ra = float(otfd[4])
+            dec = float(otfd[5])
+            pa = float(otfd[15])
 
-                ot_id = int(otfd[1])
-                ra = float(otfd[4])
-                dec = float(otfd[5])
-                pa = float(otfd[15])
+            t = Tile(ra, dec, detector, healpix_map_nside, position_angle_deg=pa)
+            t.id = ot_id
 
-                # t = Tile(ra, dec, d.deg_width, d.deg_height, healpix_map_nside)
-                t = Tile(ra, dec, d, healpix_map_nside, position_angle_deg=pa)
-
-                t.id = ot_id
-
-                for p in t.enclosed_pixel_indices:
-                    tile_pixel_data.append((t.id, map_pixel_dict[p][0], healpix_map_id))
+            for p in t.enclosed_pixel_indices:
+                tile_pixel_data.append((t.id, map_pixel_dict[p][0], healpix_map_id))
 
         print("Length of tile_pixel_data: %s" % len(tile_pixel_data))
 
@@ -546,6 +360,9 @@ class Teglon:
             print(e)
             print("\nExiting")
             return 1
+
+        print("Duplicates removed from input file:")
+        pprint.pprint(duplicate_tile_data)
 
 
 if __name__ == "__main__":
