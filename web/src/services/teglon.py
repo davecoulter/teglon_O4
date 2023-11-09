@@ -1,6 +1,7 @@
 # System packages
 import os
 import os.path
+import pprint
 import sys
 import csv
 from datetime import datetime, timezone, timedelta
@@ -2357,3 +2358,27 @@ class Teglon:
             query_db([q], commit=True)
 
         print("Detector `%s` added!" % tm_detector.name)
+
+    def add_band(self, band_name, lambda_eff, f99_coef):
+
+        # Check if band exists - if so, reject
+        select_band = '''
+            SELECT COUNT(*) FROM Band WHERE LOWER(`Name`)='%s'  
+        '''
+        band_exists = query_db([select_band % band_name])[0]
+        if len(band_exists) > 0 and band_exists[0][0] >= 1:
+            print("\n *********** Duplicated Band in DB! `%s`*********** " % band_name)
+            print("Exiting...")
+            return 1
+
+        band_data = [
+            (band_name, lambda_eff, f99_coef)
+        ]
+        band_insert = "INSERT INTO Band (Name, Effective_Wavelength, F99_Coefficient) VALUES (%s, %s, %s);"
+
+        print("\nInserting %s bands..." % len(band_data))
+        if insert_records(band_insert, band_data):
+            print("Success!")
+        else:
+            raise ("Error with INSERT! Exiting...")
+        print("...Done")
