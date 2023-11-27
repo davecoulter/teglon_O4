@@ -80,7 +80,10 @@ def integrate_pixel(pixel_data):
         "ukirt_J": "UKIRT J",
         "ukirt_H": "UKIRT H",
         "ukirt_K": "UKIRT K",
-        "Clear": "Clear"
+        "Clear": "Clear",
+        "PS1_w": "PS1 w",
+        "ATLAS_o": "ATLAS orange",
+        "ATLAS_c": "ATLAS cyan",
     }
     reverse_band_mapping = {v: k for k, v in band_mapping.items()}
 
@@ -273,7 +276,10 @@ class Teglon:
             "ukirt_J": "UKIRT J",
             "ukirt_H": "UKIRT H",
             "ukirt_K": "UKIRT K",
-            "Clear": "Clear"
+            "Clear": "Clear",
+            "PS1_w": "PS1 w",
+            "ATLAS_o": "ATLAS orange",
+            "ATLAS_c": "ATLAS cyan",
         }
         reverse_band_mapping = {v: k for k, v in band_mapping.items()}
         models = {}
@@ -343,7 +349,10 @@ class Teglon:
             "UKIRT J": (10, "UKIRT J", 0.709),
             "UKIRT H": (11, "UKIRT H", 0.449),
             "UKIRT K": (12, "UKIRT K", 0.302),
-            "Clear": (13, "Clear", 0.91)
+            "Clear": (13, "Clear", 0.91),
+            "ATLAS orange": (14, "ATLAS orange", 2.119566),
+            "PS1 w": (15, "PS1 w", 2.341),
+            "ATLAS cyan": (16, "ATLAS cyan", 2.90652),
         }
         band_dict_by_id = {
             1: (1, "SDSS u", 4.239),
@@ -358,7 +367,10 @@ class Teglon:
             10: (10, "UKIRT J", 0.709),
             11: (11, "UKIRT H", 0.449),
             12: (12, "UKIRT K", 0.302),
-            13: (13, "Clear", 0.91)
+            13: (13, "Clear", 0.91),
+            14: (14, "ATLAS orange", 2.119566),
+            15: (15, "PS1 w", 2.341),
+            16: (16, "ATLAS cyan", 2.90652),
         }
 
         map_nside = 256  # 0425
