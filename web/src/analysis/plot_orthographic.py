@@ -29,12 +29,12 @@ from web.src.utilities.filesystem_utilties import *
 start = time.time()
 
 
-plot_dust = True
-plot_contours = True
+plot_dust = False
+plot_contours = False
 plot_tiles = True
 plot_cutout = True
-plot_pixels = True
-plot_sun = True
+plot_pixels = False
+plot_sun = False
 
 
 nside128 = 128
@@ -195,7 +195,10 @@ detect_display_name_dict = {
     13: "MMTCam",  # MMT
     46: "ZTF",  # ZTF
     45: "GOTO-4",  # GOTO-4
-    51: "ANDICAM\nIR"  # ANDICAM-IR
+    51: "ANDICAM\nIR",  # ANDICAM-IR,
+    52:"ATLAS", # ATLAS
+    54: "PS1\nSkycell", # Pan-STARRS1_skycell
+    6: "KAIT" # KAIT
 }
 
 detectors = {}
@@ -225,14 +228,15 @@ tile_color_dict = {
     3: "magenta",  # THACHER
     4: "cyan",  # NICKEL
     7: "gold",  # LCOGT
-    # 11: "limegreen",  # CSS
     11: "lime",  # CSS
-    # 12: "turquoise",  # Swift
     12: "orangered",  # Swift
     13: "dodgerblue",  # MMT
     46: "royalblue",  # ZTF
     45: "orange",  # GOTO-4
-    51: "yellowgreen"  # ANDICAM-IR
+    51: "yellowgreen",  # ANDICAM-IR
+    52: "peru", # ATLAS
+    54: "red", # Pan-STARRS1_skycell
+    6: "grey" # KAIT
 }
 
 tile_marker_size_dict = {
@@ -246,11 +250,14 @@ tile_marker_size_dict = {
     13: 3,  # MMT
     46: 20,  # ZTF
     45: 15,  # GOTO-4
-    51: 2  # ANDICAM-IR
+    51: 2,  # ANDICAM-IR
+    52: 17,  # ATLAS
+    54: 7,  # Pan-STARRS1_skycell
+    6: 3 # KAIT
 }
 
 ZTF_id = 20
-KAIT_id = 6
+# KAIT_id = 6
 ZTF_approx_id = 46
 
 big_tile_list = []
@@ -262,8 +269,8 @@ for ot in ot_result:
     if detector_id == ZTF_id:
         detector_id = ZTF_approx_id
 
-    if detector_id == KAIT_id:
-        continue
+    # if detector_id == KAIT_id:
+    #     continue
 
     t = Tile(float(ot[1]), float(ot[2]), nside=healpix_map_nside,
              detector=detectors[detector_id], plot_color=tile_color_dict[detector_id])
@@ -286,24 +293,42 @@ if plot_tiles:
 
         if t.detector.name not in legend_labels:
             legend_labels.append(t.detector.name)
-            ax.plot(x1, y1, marker='s', markeredgecolor=edg_clr,
+            mkr = 's'
+            ax.plot(x1, y1, marker=mkr, alpha=1.0, markeredgecolor=edg_clr,
                     markerfacecolor=face_clr, markersize=tile_marker_size_dict[t.detector.id],
                     label=t.detector.name, linestyle='None')
 
     for ax_name, ax in axes.items():
+
+
+
         for t in big_tile_list:
             r, g, b = colors.to_rgb(t.plot_color)
             edg_clr = (r, g, b, 1.0)
             face_clr = (r, g, b, 0.1)
 
-            t.plot2(ax, facecolor=face_clr, edgecolor=edg_clr, linewidth=0.35)
+            # if t.detector.id == 11:
+            #     for tt in all_tile_list:
+            #         if tt.detector.id == 54:  # "Pan-STARRS1_skycell":
+            #             _r, _g, _b = colors.to_rgb(tt.plot_color)
+            #             _edg_clr = (_r, _g, _b, 1.0)
+            #             _face_clr = (_r, _g, _b, 0.1)
+            #
+            #             tt.plot2(ax, facecolor=_face_clr, edgecolor=_edg_clr, linewidth=0.05, alpha=0.25)
+
+            t.plot2(ax, facecolor=face_clr, edgecolor=edg_clr, linewidth=0.25)
+
+
 
         for t in little_tile_list:
             r, g, b = colors.to_rgb(t.plot_color)
             edg_clr = (r, g, b, 1.0)
             face_clr = (r, g, b, 0.1)
 
-            t.plot2(ax, facecolor=face_clr, edgecolor=edg_clr, linewidth=0.5)
+            if t.detector.id == 54:  # "Pan-STARRS1_skycell":
+                continue
+
+            t.plot2(ax, facecolor=face_clr, edgecolor=edg_clr, linewidth=0.25)
 
 
 if plot_cutout:
@@ -397,13 +422,26 @@ if plot_cutout:
             clr = plt.cm.Greys(norm(p.prob))
             p.plot2(axes["inset"], edgecolor='None', facecolor=clr, linewidth=0.25, alpha=0.5)
 
+    # for t in all_tile_list:
+    #     if t.detector.id == 54:  # "Pan-STARRS1_skycell":
+    #         t.plot2(ax, facecolor=face_clr, edgecolor=edg_clr, linewidth=0.25, alpha=1.0)
+
     for t in big_tile_list:
         # t.plot2(axes["inset"], facecolor=t.plot_color, edgecolor='None', alpha=0.1)
         t.plot2(axes["inset"], facecolor='None', edgecolor=t.plot_color, linewidth=0.5, alpha=1.0)
 
     for t in little_tile_list:
-        t.plot2(axes["inset"], facecolor=t.plot_color, edgecolor='None', alpha=0.1)
-        t.plot2(axes["inset"], facecolor='None', edgecolor=t.plot_color, linewidth=0.5, alpha=1.0)
+
+        alpha1 = 0.1
+        alpha2 = 1.0
+        # if t.detector.id == 54:  # "Pan-STARRS1_skycell":
+        #     alpha1 = 0.05
+        #     alpha2 = 0.1
+        # if t.detector.id == 54:  # "Pan-STARRS1_skycell":
+        #     continue
+
+        t.plot2(axes["inset"], facecolor=t.plot_color, edgecolor='None', alpha=alpha1)
+        t.plot2(axes["inset"], facecolor='None', edgecolor=t.plot_color, linewidth=0.5, alpha=alpha2)
 
     axes["east"].mark_inset_axes(axes["inset"])
     # axes["east"].mark_inset_circle(axes["inset"], '245d +20d', '20 deg')
