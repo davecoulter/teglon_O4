@@ -6,13 +6,12 @@ from astropy import units as u
 import astropy.coordinates as coord
 from astropy.table import Table
 from astropy.time import Time
-from datetime import datetime
 from astropy.io import ascii
 from dustmaps.sfd import SFDQuery
 
 import json
 
-from web.src.objects.Detector import *
+# from web.src.objects.Detector import *
 from web.src.objects.Tile import *
 # from web.src.utilities.Database_Helpers import *
 
@@ -62,33 +61,6 @@ def convert_obs_file_to_escv(gw_id, healpix_dir, tile_file, tele):
     formatted_obs_tiles_dir = obs_tiles_dir.replace("{GWID}", gw_id)
     file_path = formatted_obs_tiles_dir.replace("{tile_file}", tile_file)
 
-    # print("\tLoading existing E(B-V)...")
-    # ebv = None
-    # if os.path.exists(pickle_output_dir + "ebv.pkl"):
-    #     with open(pickle_output_dir + "ebv.pkl", 'rb') as handle:
-    #         ebv = pickle.load(handle)
-    # else:
-    #     select_ebv = '''
-    #     SELECT
-    #         ebv.EBV
-    #     FROM SkyPixel_EBV ebv
-    #     JOIN SkyPixel sp on sp.id = ebv.N128_SkyPixel_id
-    #     ORDER BY sp.Pixel_Index;
-    #     '''
-    #     ebv = np.asarray(query_db([select_ebv])[0])
-
-    # Check detector name
-    # detector_select_by_name = "SELECT id, Name FROM Detector WHERE Name='{detect_name}';"
-    # detector_result = query_db([detector_select_by_name.format(detect_name=tele)])[0]
-    #
-    # detect_name = tele
-    # if len(detector_result) != 1:
-    #     print("\nUnknown/ambiguous detector: %s" % tele)
-    #     print("Exiting...")
-    #     return 1
-    # else:
-    #     detect_name = detector_result[0][1]
-
     detect_name = tele
 
     band_mapping = {
@@ -106,11 +78,15 @@ def convert_obs_file_to_escv(gw_id, healpix_dir, tile_file, tele):
         "K": "UKIRT K",
         "Clear": "Clear",
         "open": "Clear",
+        "ip": "SDSS i",
+        "rp": "SDSS r",
+        "gp": "SDSS g",
         "o": "ATLAS orange",
+        "c": "ATLAS cyan",
         "w": "PS1 w"
     }
 
-    table_to_convert = ascii.read(file_path, delimiter=' ')
+    table_to_convert = ascii.read(file_path, delimiter=',')
 
     # Sanitize columns
     for key in table_to_convert.keys():
@@ -119,22 +95,22 @@ def convert_obs_file_to_escv(gw_id, healpix_dir, tile_file, tele):
 
     position_angle_in_keys = False
     for key in table_to_convert.keys():
-        if key in ['fieldra', 'r.a.', 'right_ascension', 'centrera']:
+        if key in ['fieldra', 'r.a.', 'right_ascension', 'RA', 'ra0']:
             table_to_convert.rename_column(key, 'ra')
-        if key in ['fielddec', 'declination', 'dec.', 'centredec']:
+        if key in ['fielddec', 'declination', 'dec.', 'Dec', 'dec0', 'DEC']:
             table_to_convert.rename_column(key, 'dec')
-        if key in ['fieldname', 'object', 'name', 'field', 'gladid']:
+        if key in ['fieldname', 'object', 'name', 'field', 'Object', 'name', 'skycellid', 'exp_id']:
             table_to_convert.rename_column(key, 'field_name')
-        # if key in ['exp_time']:
-        #     table_to_convert.rename_column(key, 'exp_time')
-        if key in ['p.a.', 'angle']:
+        if key in ['Exp_Time', 'exptime']:
+            table_to_convert.rename_column(key, 'exp_time')
+        if key in ['p.a.', 'angle', 'P.A.']:
             position_angle_in_keys = True
             table_to_convert.rename_column(key, 'position_angle')
-        if key in ['band_pass', 'band']:
+        if key in ['band_pass', 'band', 'Filter', 'filter']:
             table_to_convert.rename_column(key, 'filter')
-        if key in ['obs_date', 'date', 'ut']:
+        if key in ['obs_date', 'date', 'MJD']:
             table_to_convert.rename_column(key, 'mjd')
-        if key in ['lim_mag', 'mag', 'limitmag']:
+        if key in ['lim_mag', 'mag', 'limmag', '3.5sigmag', 'limiting_magnitude']:
             table_to_convert.rename_column(key, 'mag_lim')
 
     output_table = blank_target_table()
@@ -148,48 +124,18 @@ def convert_obs_file_to_escv(gw_id, healpix_dir, tile_file, tele):
         new_row['ra'] = c.ra.degree
         new_row['dec'] = c.dec.degree
 
-        # # get EBV for this sight line
-        # sfd = SFDQuery()
-        # ebv = sfd(c)
-        # new_row['EBV'] = ebv
-
         # Try parsing date:
         tm = None
         try:
             tm = Time(row['mjd'], format='mjd')
         except:
-            try:
-                date_str_tokens = row['mjd'].split('T')
-                date = date_str_tokens[0]
-                time = date_str_tokens[-1]
-
-                date_tokens = date.split('/')
-                day = int(date_tokens[0])
-                month = int(date_tokens[1])
-                year = int(date_tokens[2])
-
-                time_tokens = time.split(":")
-                hour = int(time_tokens[0])
-                minute = int(time_tokens[1])
-                second = int(float(time_tokens[2]))
-                d = datetime(year, month, day, hour, minute, second)
-                tm = Time(d, scale='utc')
-            except:
-                print("\nError! Can't parse date field!")
-                print("Exiting...")
-                return 1
-
+            print("\nError! Date field not in MJD format!")
+            print("Exiting...")
+            return 1
         new_row['mjd'] = tm.to_value(format="mjd")
 
-        if 'filter' in row:
-            new_row['filter'] = band_mapping[row['filter']]
-        else:
-            raise Exception("No filter information!")
-
-        if 'exp_time' in row:
-            new_row['exp_time'] = row['exp_time']
-        else:
-            new_row['exp_time'] = 0.0
+        new_row['filter'] = band_mapping[row['filter']]
+        new_row['exp_time'] = row['exp_time']
 
         if position_angle_in_keys:
             new_row['position_angle'] = row['position_angle']
@@ -212,6 +158,12 @@ def convert_obs_file_to_escv(gw_id, healpix_dir, tile_file, tele):
             new_row['a_err'] = row['a_err']
             new_row['n'] = row['n']
             new_row['n_err'] = row['n_err']
+        elif detect_name in ["SINISTRO"]:
+            new_row['source'] = row['graceid'] + "_LCOGT_Prv_Comm"
+            new_row['mag_lim'] = row['mag_lim']
+        elif detect_name in ["ATLAS", "Pan-STARRS1_skycell"]:
+            new_row['source'] = str(row['field_name']) + "_Stephen_Smartt_Prv_Comm"
+            new_row['mag_lim'] = row['mag_lim']
         else:
             new_row['source'] = row['source']
             new_row['mag_lim'] = row['mag_lim']
@@ -238,8 +190,6 @@ if __name__ == "__main__":
     parser.add_argument('--tele', default="", type=str,
                         help='''Telescope name for the telescope to extract files for. Must be a name known 
                         in the Teglon db.''')
-    parser.add_argument('--coord_format', default="deg", type=str, help='''What format the sky coordinates are in. 
-                        Available: "hour" or "deg". Default: "hour".''')
 
     args = parser.parse_args()
     convert_obs_file_to_escv(**vars(args))
@@ -247,7 +197,7 @@ if __name__ == "__main__":
     end = time.time()
     duration = (end - start)
     print("\n********* start DEBUG ***********")
-    print("Teglon `extract_tiles` execution time: %s" % duration)
+    print("Teglon `convert_lcogt` execution time: %s" % duration)
     print("********* end DEBUG ***********\n")
 
 
