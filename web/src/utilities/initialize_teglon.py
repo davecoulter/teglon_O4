@@ -179,8 +179,8 @@ class Teglon:
         for t in tiles:
             static_tile_data.append((t.detector.id,
                                      t.field_name,
-                                     t.ra_deg,
-                                     t.dec_deg,
+                                     float(t.ra_deg),
+                                     float(t.dec_deg),
                                      "POINT(%s %s)" % (t.dec_deg, t.ra_deg - 180.0),
                                      # Dec, RA order due to MySQL convention for lat/lon
                                      t.query_polygon_string,
@@ -308,7 +308,7 @@ class Teglon:
             sky_distance_data = []
 
             for d in sky_distances:
-                sky_distance_data.append((d.D1, d.D2, d.dCoV, d.Sch_L10, d.NSIDE))
+                sky_distance_data.append((float(d.D1), float(d.D2), float(d.dCoV), float(d.Sch_L10), d.NSIDE))
 
             print("\nInserting %s sky distances..." % len(sky_distance_data))
             if insert_records(sky_distance_insert, sky_distance_data):
@@ -366,7 +366,7 @@ class Teglon:
                 if i == 0: # NSIDE=2 has no parents to associate
                     for pi, pe in pixel_dict.items():
 
-                        sky_pixel_data.append((pe.coord.ra.degree, pe.coord.dec.degree,
+                        sky_pixel_data.append((float(pe.coord.ra.degree), float(pe.coord.dec.degree),
                         "POINT(%s %s)" % (pe.coord.dec.degree, pe.coord.ra.degree - 180.0), # Dec, RA order due to MySQL convention for lat/lon
                         pe.query_polygon_string, pe.nside, pe.index, None))
 
@@ -381,7 +381,7 @@ class Teglon:
 
                         parent_id = sky_pixels[nsides[i-1]][pe.parent_pixel.index].id
 
-                        sky_pixel_data.append((pe.coord.ra.degree, pe.coord.dec.degree,
+                        sky_pixel_data.append((float(pe.coord.ra.degree), float(pe.coord.dec.degree),
                         "POINT(%s %s)" % (pe.coord.dec.degree, pe.coord.ra.degree - 180.0), # Dec, RA order due to MySQL convention for lat/lon
                         pe.query_polygon_string, pe.nside, pe.index, parent_id))
 
@@ -537,7 +537,8 @@ class Teglon:
                     instrument_list_target_url = "{}/{}?{}".format(tm_base_url, instrument_url,
                                                                    urllib.parse.urlencode(instrument_synopsis_request))
                     instrument_response = requests.get(url=instrument_list_target_url)
-                    instrument_result = [json.loads(r) for r in json.loads(instrument_response.text)]
+                    # instrument_result = [json.loads(r) for r in json.loads(instrument_response.text)]
+                    instrument_result = [r for r in json.loads(instrument_response.text)]
                     instrument_names_full = {ir["id"]: (ir["instrument_name"], ir['nickname']) for ir in
                                              instrument_result}
                     instrument_names = {}
@@ -569,7 +570,9 @@ class Teglon:
                                                                      urllib.parse.urlencode(
                                                                          instrument_detail_request))
                     instrument_detail_response = requests.get(url=instrument_detail_target_url)
-                    instrument_detail_result = [json.loads(r) for r in
+                    # instrument_detail_result = [json.loads(r) for r in
+                    #                             json.loads(instrument_detail_response.text)]
+                    instrument_detail_result = [r for r in
                                                 json.loads(instrument_detail_response.text)]
 
                     instrument_footprints = {}
@@ -651,7 +654,10 @@ class Teglon:
                 ("UKIRT J", 12482.9, 0.709),
                 ("UKIRT H", 16588.4, 0.449),
                 ("UKIRT K", 21897.7, 0.302),
-                ("Clear", 5618.41, 0.91)
+                ("Clear", 5618.41, 0.91),
+                ("ATLAS cyan", 5287.72, 2.90652),
+                ("ATLAS orange", 6750.15, 2.119566),
+                ("PS1 w", 6285.91, 2.341),
             ]
 
             band_insert = "INSERT INTO Band (Name, Effective_Wavelength, F99_Coefficient) VALUES (%s, %s, %s);"
@@ -836,7 +842,7 @@ class Teglon:
 
                 insert_completeness_data = []
                 for sp_key, sp_value in current_completenesses.items():
-                    insert_completeness_data.append((sp_value[0], sp_value[1], sp_value[2], sp_value[3], sp_value[4]))
+                    insert_completeness_data.append((sp_value[0], sp_value[1], float(sp_value[2]), float(sp_value[3]), float(sp_value[4])))
 
                 batch_insert(sky_completeness_insert, insert_completeness_data)
 

@@ -298,10 +298,12 @@ class Teglon:
                 theta_obs = float(model_props[8].split("=")[1].strip())
                 model_key = (E, n, theta_obs)
             elif self.options.model_type == 'kne':
-                vej = float(model_props[0].split('=')[-1].strip())
-                mej = float(model_props[1].split('=')[-1].strip())
-                ye = float(model_props[2].split('=')[-1].strip())
-                model_key = (vej, mej, ye)
+                kappa = float(model_props[0].split("=")[1])
+                type = model_props[1].split("=")[1]
+                mass = float(model_props[2].split("=")[1])
+                velocity = float(model_props[3].split("=")[1])
+                theta_obs = float(model_props[4].split("=")[1])
+                model_key = (kappa, type, mass, velocity, theta_obs)
             else:
                 raise Exception("Unkown model type! `%s`" % self.options.model_type)
 
@@ -336,42 +338,51 @@ class Teglon:
                 models[model_key][col] = light_curve_func
         # endregion
 
-        band_dict_by_name = {
-            "SDSS u": (1, "SDSS u", 4.239),
-            "SDSS g": (2, "SDSS g", 3.303),
-            "SDSS r": (3, "SDSS r", 2.285),
-            "SDSS i": (4, "SDSS i", 1.698),
-            "SDSS z": (5, "SDSS z", 1.263),
-            "Landolt B": (6, "Landolt B", 3.626),
-            "Landolt V": (7, "Landolt V", 2.742),
-            "Landolt R": (8, "Landolt R", 2.169),
-            "Landolt I": (9, "Landolt I", 1.505),
-            "UKIRT J": (10, "UKIRT J", 0.709),
-            "UKIRT H": (11, "UKIRT H", 0.449),
-            "UKIRT K": (12, "UKIRT K", 0.302),
-            "Clear": (13, "Clear", 0.91),
-            "ATLAS orange": (14, "ATLAS orange", 2.119566),
-            "PS1 w": (15, "PS1 w", 2.341),
-            "ATLAS cyan": (16, "ATLAS cyan", 2.90652),
-        }
-        band_dict_by_id = {
-            1: (1, "SDSS u", 4.239),
-            2: (2, "SDSS g", 3.303),
-            3: (3, "SDSS r", 2.285),
-            4: (4, "SDSS i", 1.698),
-            5: (5, "SDSS z", 1.263),
-            6: (6, "Landolt B", 3.626),
-            7: (7, "Landolt V", 2.742),
-            8: (8, "Landolt R", 2.169),
-            9: (9, "Landolt I", 1.505),
-            10: (10, "UKIRT J", 0.709),
-            11: (11, "UKIRT H", 0.449),
-            12: (12, "UKIRT K", 0.302),
-            13: (13, "Clear", 0.91),
-            14: (14, "ATLAS orange", 2.119566),
-            15: (15, "PS1 w", 2.341),
-            16: (16, "ATLAS cyan", 2.90652),
-        }
+        # Build Band mappings...
+        band_select = '''
+            SELECT id, Name, F99_Coefficient FROM Band;
+        '''
+        band_results = query_db([band_select])[0]
+
+        band_dict_by_name = {br[1]:(br[0], br[1], br[2]) for br in band_results}
+        band_dict_by_id = {br[0]: (br[0], br[1], br[2]) for br in band_results}
+
+        # band_dict_by_name = {
+        #     "SDSS u": (1, "SDSS u", 4.239),
+        #     "SDSS g": (2, "SDSS g", 3.303),
+        #     "SDSS r": (3, "SDSS r", 2.285),
+        #     "SDSS i": (4, "SDSS i", 1.698),
+        #     "SDSS z": (5, "SDSS z", 1.263),
+        #     "Landolt B": (6, "Landolt B", 3.626),
+        #     "Landolt V": (7, "Landolt V", 2.742),
+        #     "Landolt R": (8, "Landolt R", 2.169),
+        #     "Landolt I": (9, "Landolt I", 1.505),
+        #     "UKIRT J": (10, "UKIRT J", 0.709),
+        #     "UKIRT H": (11, "UKIRT H", 0.449),
+        #     "UKIRT K": (12, "UKIRT K", 0.302),
+        #     "Clear": (13, "Clear", 0.91),
+        #     "ATLAS orange": (14, "ATLAS orange", 2.119566),
+        #     "PS1 w": (15, "PS1 w", 2.341),
+        #     "ATLAS cyan": (16, "ATLAS cyan", 2.90652),
+        # }
+        # band_dict_by_id = {
+        #     1: (1, "SDSS u", 4.239),
+        #     2: (2, "SDSS g", 3.303),
+        #     3: (3, "SDSS r", 2.285),
+        #     4: (4, "SDSS i", 1.698),
+        #     5: (5, "SDSS z", 1.263),
+        #     6: (6, "Landolt B", 3.626),
+        #     7: (7, "Landolt V", 2.742),
+        #     8: (8, "Landolt R", 2.169),
+        #     9: (9, "Landolt I", 1.505),
+        #     10: (10, "UKIRT J", 0.709),
+        #     11: (11, "UKIRT H", 0.449),
+        #     12: (12, "UKIRT K", 0.302),
+        #     13: (13, "Clear", 0.91),
+        #     14: (14, "ATLAS orange", 2.119566),
+        #     15: (15, "PS1 w", 2.341),
+        #     16: (16, "ATLAS cyan", 2.90652),
+        # }
 
         map_nside = 256  # 0425
         map_pixels = None
@@ -860,8 +871,10 @@ class Teglon:
             dtype = ['f8', 'f8', 'f8', 'f8']
             output_filename = 'Detection_Results_SGRB_%s_%s.prob' % (self.options.batch_dir, self.options.sub_dir)
         elif self.options.model_type == 'kne':
-            cols = ['vej', 'mej', 'ye', 'Prob']
-            dtype = ['f8', 'f8', 'f8', 'f8']
+            # cols = ['vej', 'mej', 'ye', 'Prob']
+            # dtype = ['f8', 'f8', 'f8', 'f8']
+            cols = ['kappa', 'type', 'mass', 'velocity', 'theta_obs', 'Prob']
+            dtype = ['f8', 'U16', 'f8', 'f8', 'f8', 'f8']
             output_filename = 'Detection_KNe_%s.prob' % self.options.sub_dir
 
         result_table = Table(dtype=dtype, names=cols)
@@ -869,19 +882,26 @@ class Teglon:
         if self.options.model_type == 'linear':
             for model_param_tuple, prob in net_prob_by_model.items():
                 result_table.add_row([model_param_tuple[0], model_param_tuple[1], prob])
-        elif self.options.model_type == 'grb' or self.options.model_type == 'kne':
+        elif self.options.model_type == 'grb':
             for model_param_tuple, prob in net_prob_by_model.items():
-
                 try:
                     result_table.add_row([model_param_tuple[0], model_param_tuple[1], model_param_tuple[2], prob])
                 except Exception as e:
                     print("Here")
                     test = 1
 
-
                     print(e)
                     print("\nExiting")
                     return 1
+        elif self.options.model_type == 'kne':
+            for model_param_tuple, prob in net_prob_by_model.items():
+                result_table.add_row([model_param_tuple[0],
+                                      model_param_tuple[1],
+                                      model_param_tuple[2],
+                                      model_param_tuple[3],
+                                      model_param_tuple[4],
+                                      prob])
+
 
         result_table.write("%s/%s" % (formatted_model_output_dir, output_filename),
                            overwrite=True, format='ascii.ecsv')

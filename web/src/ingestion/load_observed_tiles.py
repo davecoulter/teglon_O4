@@ -165,22 +165,22 @@ class Teglon:
 
         for row in input_table:
 
-            source = row['source']
-            field_name = row['field_name']
-            ra = row['ra']
-            dec = row['dec']
+            source = str(row['source'])
+            field_name = str(row['field_name'])
+            ra = float(row['ra'])
+            dec = float(row['dec'])
 
             n128_pix_index = hp.ang2pix(128, ra, dec, lonlat=True)
-            tile_ebv = ebv[n128_pix_index]
+            tile_ebv = float(ebv[n128_pix_index])
             n128_id = N128_dict[n128_pix_index]
 
             filter_name = row['filter']
             filter_id = filter_lookup[filter_name]
 
-            mjd = row['mjd']
-            exp_time = row['exp_time']
-            mag_lim = row['mag_lim']
-            position_angle = row['position_angle']
+            mjd = float(row['mjd'])
+            # exp_time = row['exp_time']
+            mag_lim = float(row['mag_lim'])
+            position_angle = float(row['position_angle'])
 
             # 1. db check
             error_msg = "\tDuplicate Tile! (Detector: %s, MJD: %s, Filter_id: %s, N128_id: %s)" % (detector.id, mjd,
@@ -203,29 +203,47 @@ class Teglon:
                 duplicate_tile_data.append(unique_key)
                 continue
 
+            exp_time = row['exp_time']
+            if np.isnan(exp_time):
+                exp_time = None
+            else:
+                exp_time = float(exp_time)
+
             x0 = row['x0']
             if np.isnan(x0):
                 x0 = None
+            else:
+                x0 = float(x0)
 
             x0_err = row['x0_err']
             if np.isnan(x0_err):
                 x0_err = None
+            else:
+                x0_err = float(x0_err)
 
             a = row['a']
             if np.isnan(a):
                 a = None
+            else:
+                a = float(a)
 
             a_err = row['a_err']
             if np.isnan(a_err):
                 a_err = None
+            else:
+                a_err = float(a_err)
 
             n = row['n']
             if np.isnan(n):
                 n = None
+            else:
+                n = float(n)
 
             n_err = row['n_err']
             if np.isnan(n_err):
                 n_err = None
+            else:
+                n_err = float(n_err)
 
             t = Tile(ra, dec, detector, int(healpix_map_nside), position_angle_deg=position_angle)
 
@@ -237,7 +255,7 @@ class Teglon:
                 dec,
                 "POINT(%s %s)" % (dec, ra - 180.0),  # Dec, RA order due to MySQL convention for lat/lon
                 t.query_polygon_string,
-                float(tile_ebv),
+                tile_ebv,
                 n128_id,
                 filter_id,
                 mjd,

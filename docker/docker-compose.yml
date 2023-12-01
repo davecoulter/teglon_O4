@@ -2,7 +2,8 @@ version: '2.4'
 services:
     gw_db:
         container_name: teglon_db
-        image: "mysql:8.0.25"
+#        image: "mysql:8.0.25"
+        image: "arm64v8/mysql:8.0.35"
         mem_limit: ${MEM_LIMIT}
         ports:
             - ${LOCAL_DB_PORT}:3306
@@ -10,7 +11,8 @@ services:
             - ${VOL_DB}:/var/lib/mysql
             - ./db_init/db_configuration:/etc/mysql/conf.d
             - ./db_init/init.sql:/docker-entrypoint-initdb.d/1.sql
-            - ./db_init/teglon_O4.sql:/docker-entrypoint-initdb.d/2.sql
+#            - ./db_init/teglon_O4.sql:/docker-entrypoint-initdb.d/2.sql
+            - ./db_init/teglon_schema_20231116.sql:/docker-entrypoint-initdb.d/2.sql
             - ./db_init/angsep.sql:/docker-entrypoint-initdb.d/3.sql
             - ./db_init/backup_tables.sql:/docker-entrypoint-initdb.d/4.sql
             - ./db_init/delete_map.sql:/docker-entrypoint-initdb.d/5.sql
@@ -21,18 +23,23 @@ services:
           test: [ "CMD", "mysqladmin" ,"ping", "-h", "localhost" ]
           timeout: 20s
           retries: 10
+        networks:
+          - teglon_net
     gw_script:
-      container_name: teglon_script
-      platform: linux/amd64
+      container_name: teglon_script_arm64
+#      platform: linux/amd64
       build: ./teglon_worker
-      image: "ghcr.io/davecoulter/teglon_o4:latest"
+#      image: "ghcr.io/davecoulter/teglon_o4:latest"
+      image: "test_teglon:0.0.2"
       mem_limit: ${MEM_LIMIT}
       cpus: ${CPU_LIMIT}
       volumes:
         - ${VOL_APP}:/app
         - ${VOL_DUSTMAPS}:/dustmaps
-      links:
-        - gw_db
+#      links:
+#        - gw_db
+      networks:
+        - teglon_net
       environment:
         PYTHONPATH: /app
         DUSTMAPS_CONFIG_FNAME: /dustmaps/dustmaps_config.json
@@ -40,10 +47,12 @@ services:
         gw_db:
           condition: service_healthy
     gw_dev_no_db:
-      container_name: teglon_dev_no_db
-      platform: linux/amd64
+#      container_name: teglon_dev_no_db
+      container_name: teglon_dev_no_db_arm64
+#      platform: linux/amd64
       build: ./teglon_worker
-      image: "ghcr.io/davecoulter/teglon_o4:latest"
+#      image: "ghcr.io/davecoulter/teglon_o4:latest"
+      image: "test_teglon:0.0.2"
       mem_limit: ${MEM_LIMIT}
       cpus: ${CPU_LIMIT}
       volumes:
@@ -52,3 +61,6 @@ services:
       environment:
         PYTHONPATH: /app
         DUSTMAPS_CONFIG_FNAME: /dustmaps/dustmaps_config.json
+networks:
+  teglon_net:
+    name: teglon_net

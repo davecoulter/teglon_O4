@@ -46,9 +46,38 @@ for dm_index, abs_mag in enumerate(abs_mag_array):
 print("Number of generated models: %s" % len(abs_lcs_array))
 
 
-cols = ['time', 'sdss_u', 'sdss_g', 'sdss_r', 'sdss_i', 'sdss_z', 'Clear', 'johnson_B', 'johnson_V', 'johnson_R',
-        'johnson_I', 'ukirt_J', 'ukirt_H', 'ukirt_K']
-dtype = ['f8', 'f8', 'f8', 'f8', 'f8', 'f8', 'f8', 'f8', 'f8', 'f8', 'f8', 'f8', 'f8', 'f8']
+cols = ['time',
+        'swift_uvot_uvw2',
+        'swift_uvot_uvm2',
+        'swift_uvot_uvw1',
+        'swift_uvot_U',
+        'swift_uvot_B',
+        'swift_uvot_V',
+        'swift_uvot_W',
+        'johnson_U',
+        'johnson_B',
+        'johnson_V',
+        'johnson_R',
+        'johnson_I',
+        'sdss_u',
+        'sdss_g',
+        'sdss_r',
+        'sdss_i',
+        'sdss_z',
+        'PS1_g',
+        'PS1_r',
+        'PS1_i',
+        'PS1_z',
+        'PS1_Y',
+        'PS1_w',
+        'ATLAS_c',
+        'ATLAS_o',
+        'ukirt_J',
+        'ukirt_H',
+        'ukirt_K',
+        'Clear']
+dtype = ['f8', 'f8', 'f8', 'f8', 'f8', 'f8', 'f8', 'f8', 'f8', 'f8', 'f8', 'f8', 'f8', 'f8', 'f8',
+         'f8', 'f8', 'f8', 'f8', 'f8', 'f8', 'f8', 'f8', 'f8', 'f8', 'f8', 'f8', 'f8', 'f8', 'f8']
 
 j = 0
 for i, (key, lc) in enumerate(abs_lcs_array.items()):
@@ -72,7 +101,8 @@ for i, (key, lc) in enumerate(abs_lcs_array.items()):
     print("Writing linear model: (%s, %s)" % key)
     for i, epoch in enumerate(lc):
         result_table.add_row([time_array[i], epoch, epoch, epoch, epoch, epoch, epoch, epoch, epoch, epoch, epoch,
-                              epoch, epoch, epoch])
+                              epoch, epoch, epoch, epoch, epoch, epoch, epoch, epoch, epoch, epoch, epoch, epoch,
+                              epoch, epoch, epoch, epoch, epoch, epoch, epoch])
 
     result_table.write("%s/%s_%s.dat" % (current_sub_dir, abs_mag.replace(".", "_"),
                                                       dm.replace(".", "_")), overwrite=True, format='ascii.ecsv')

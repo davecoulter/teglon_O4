@@ -4,7 +4,6 @@ from matplotlib.ticker import ScalarFormatter
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-from mpl_toolkits.basemap import Basemap
 from matplotlib.patches import Polygon
 from matplotlib.pyplot import cm
 from matplotlib.patches import CirclePolygon
@@ -68,7 +67,6 @@ all_n = []
 E_n = OrderedDict()
 E_prob = OrderedDict()
 all_probs = []
-# for i in range(10):
 for i in range(27):
     sub_dir = i+1
 
@@ -510,7 +508,7 @@ else:
     ax.text(1.6e-1, 3.5, "Short GRB", fontsize=22, ha="center", zorder=9999, color="deepskyblue",
             # color="deepskyblue",
             path_effects=[path_effects.withStroke(linewidth=2.0, foreground='black')])
-ax.errorbar(x=GRB170817A_n, y=GRB170817A_E_k_iso_FOE, fmt='*', mew=1.5, mec="black", ms=24.0, color='black',
+ax.errorbar(x=GRB170817A_n, y=GRB170817A_E_k_iso_FOE, fmt='*', mew=1.5, mec="white", ms=24.0, color='black',
             label="GRB 170817A\nMurguia-berthier et al. 2017")
 
 
@@ -562,15 +560,17 @@ print("min/max prob: %s, %s" % (min_prob, max_prob))
 #
 # ]
 
-#
-# tks_strings_on_axis = [
-#     "0%",
-#     "0.4%",
-#     "3.2%",
-#     "28%"
-# ]
+# Check the real values with below
+# tks_strings_on_axis = ["%s" % tk for tk in tks]
 
-tks_strings_on_axis = ["%s" % tk for tk in tks]
+# Then write out a custom tick based on the above
+tks_strings_on_axis = [
+    "0.03%",
+    "0.3%",
+    "3.6%",
+    "43%"
+]
+
 
 cb = fig.colorbar(sm, ax=ax, orientation='vertical', fraction=0.05, pad=0.02) #, alpha=0.80 , format=cbformat
 cb.set_ticks(tks)
@@ -609,7 +609,8 @@ else:
     plt.xlabel(r'Surrounding Gas Density $\mathrm{\left(cm^{-3}\right)}$', fontsize=32)
 
 if not is_poster_plot:
-    plt.ylabel(r'$\mathrm{E_{K,iso}}$ $\left(\times 10^{51} \mathrm{ergs}\right)}$',fontsize=32)
+    plt.ylabel(r'$\mathrm{E_{K,iso}} \left(\times 10^{51} \mathrm{ergs}\right)$', fontsize=32)
+    # plt.ylabel('Ekiso', fontsize=32)
 else:
     plt.ylabel(r'Burst Energy $\left(\times 10^{51} \mathrm{ergs}\right)}$', fontsize=32)
 # if grb_axis == "onaxis":

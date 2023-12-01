@@ -43,6 +43,7 @@ from web.src.objects.Tile import *
 from web.src.objects.Pixel_Element import *
 from web.src.utilities.Database_Helpers import *
 from web.src.utilities.filesystem_utilties import *
+from ligo.skymap.postprocess.util import find_greedy_credible_levels
 
 from configparser import RawConfigParser
 
@@ -1194,52 +1195,62 @@ class Teglon:
             print("N128 select execution time: %s" % (t2 - t1))
             print("********* end DEBUG ***********\n")
 
-            # Resolve pixel distance distribution. Clean output arrays prior to serialization...
-            # MySQL cannot store the np.inf value returned by healpy. Get a value that's close but not too close!!
-            t1 = time.time()
+            mean = None
+            stddev = None
+            norm = None
+            cleaned_prob = None
+            cleaned_distmu = None
+            cleaned_distsigma = None
+            cleaned_distnorm = None
+            pix_indices = None
             max_double_value = 1.5E+308
-
-            from ligo.skymap.postprocess.util import find_greedy_credible_levels
             percentiles = find_greedy_credible_levels(prob)
-            _90th_indices = np.where(percentiles <= 0.91)
 
-            windowed_prob = prob[_90th_indices]
-            windowed_distmu = distmu[_90th_indices]
-            windowed_distsigma = distsigma[_90th_indices]
-            windowed_distnorm = distnorm[_90th_indices]
+            # Resolve pixel distance distribution. Clean output arrays prior to serialization...
+            #   e.g., MySQL cannot store the np.inf value returned by healpy.
+            #   Get a value that's close but not too close!!
+            t1 = time.time()
 
-            # distmu[distmu > max_double_value] = max_double_value
-            # distsigma[distsigma > max_double_value] = max_double_value
-            # distnorm[distnorm > max_double_value] = max_double_value
-            #
-            # mean, stddev, norm = distance.parameters_to_moments(distmu, distsigma)
-            #
-            # mean[mean > max_double_value] = max_double_value
-            # stddev[stddev > max_double_value] = max_double_value
-            # norm[norm > max_double_value] = max_double_value
+            if analysis_mode:
+                print("\n********* start DEBUG ***********")
+                print("In `Analysis` Mode -- loading all pixels into db...")
+                print("********* end DEBUG ***********\n")
 
-            windowed_distmu[windowed_distmu > max_double_value] = max_double_value
-            windowed_distsigma[windowed_distsigma > max_double_value] = max_double_value
-            windowed_distnorm[windowed_distnorm > max_double_value] = max_double_value
+                # Don't window the pixel array in "analysis" mode
+                pix_indices = np.where(percentiles <= 1.0)
+                cleaned_prob = prob
+                cleaned_distmu = distmu
+                cleaned_distsigma = distsigma
+                cleaned_distnorm = distnorm
+            else:
+                print("\n********* start DEBUG ***********")
+                print("In `Search` Mode -- loading 90th percentile pixels into db...")
+                print("********* end DEBUG ***********\n")
 
-            mean, stddev, norm = distance.parameters_to_moments(windowed_distmu, windowed_distsigma)
+                # Window the pixel array when we're in default "search" mode
+                pix_indices = np.where(percentiles <= 0.91)
+                cleaned_prob = prob[pix_indices]
+                cleaned_distmu = distmu[pix_indices]
+                cleaned_distsigma = distsigma[pix_indices]
+                cleaned_distnorm = distnorm[pix_indices]
 
+            cleaned_distmu[cleaned_distmu > max_double_value] = max_double_value
+            cleaned_distsigma[cleaned_distsigma > max_double_value] = max_double_value
+            cleaned_distnorm[cleaned_distnorm > max_double_value] = max_double_value
+
+            mean, stddev, norm = distance.parameters_to_moments(cleaned_distmu, cleaned_distsigma)
             mean[mean > max_double_value] = max_double_value
             stddev[stddev > max_double_value] = max_double_value
             norm[norm > max_double_value] = max_double_value
 
-            # theta, phi = hp.pix2ang(map_nside, range(len(prob)))
-            theta, phi = hp.pix2ang(map_nside, _90th_indices)
+            theta, phi = hp.pix2ang(map_nside, pix_indices)
             N128_indices = hp.ang2pix(nside128, theta, phi)
 
             healpix_pixel_data = []
-            # for i, n128_i in enumerate(N128_indices):
-            for i, (pix_i, n128_i) in enumerate(zip(_90th_indices[0], N128_indices[0])):
+            for i, (pix_i, n128_i) in enumerate(zip(pix_indices[0], N128_indices[0])):
                 N128_pixel_id = N128_dict[n128_i]
-                # healpix_pixel_data.append((healpix_map_id, i, prob[i], distmu[i], distsigma[i], distnorm[i], mean[i],
-                #                            stddev[i], norm[i], N128_pixel_id))
-                healpix_pixel_data.append((healpix_map_id, pix_i, windowed_prob[i], windowed_distmu[i],
-                                           windowed_distsigma[i], windowed_distnorm[i], mean[i],
+                healpix_pixel_data.append((healpix_map_id, pix_i, cleaned_prob[i], cleaned_distmu[i],
+                                           cleaned_distsigma[i], cleaned_distnorm[i], mean[i],
                                            stddev[i], norm[i], N128_pixel_id))
 
             # Clean up
@@ -1530,162 +1541,163 @@ class Teglon:
                     print("\nExiting")
                     return 1
 
-        print("Bulk uploading Tile-Pixel...")
-        t1 = time.time()
-        st_hp_upload_sql = """LOAD DATA LOCAL INFILE '%s' 
-                            INTO TABLE StaticTile_HealpixPixel 
-                            FIELDS TERMINATED BY ',' 
-                            LINES TERMINATED BY '\n' 
-                            (StaticTile_id, HealpixPixel_id, HealpixMap_id);"""
+        if build_tile_pixel_relation:
+            print("Bulk uploading Tile-Pixel...")
+            t1 = time.time()
+            st_hp_upload_sql = """LOAD DATA LOCAL INFILE '%s' 
+                                INTO TABLE StaticTile_HealpixPixel 
+                                FIELDS TERMINATED BY ',' 
+                                LINES TERMINATED BY '\n' 
+                                (StaticTile_id, HealpixPixel_id, HealpixMap_id);"""
 
-        success = bulk_upload(st_hp_upload_sql % tile_pixel_upload_csv)
-        if not success:
-            print("\nUnsuccessful bulk upload. Exiting...")
-            return 1
+            success = bulk_upload(st_hp_upload_sql % tile_pixel_upload_csv)
+            if not success:
+                print("\nUnsuccessful bulk upload. Exiting...")
+                return 1
 
-        t2 = time.time()
-        print("\n********* start DEBUG ***********")
-        print("Tile-Pixel CSV upload execution time: %s" % (t2 - t1))
+            t2 = time.time()
+            print("\n********* start DEBUG ***********")
+            print("Tile-Pixel CSV upload execution time: %s" % (t2 - t1))
 
-        try:
-            print("Removing `%s`..." % tile_pixel_upload_csv)
-            os.remove(tile_pixel_upload_csv)
+            try:
+                print("Removing `%s`..." % tile_pixel_upload_csv)
+                os.remove(tile_pixel_upload_csv)
 
-            # clean up
-            print("freeing `tile_pixel_data`...")
-            del tile_pixel_data
+                # clean up
+                print("freeing `tile_pixel_data`...")
+                del tile_pixel_data
 
-            print("... Done")
-        except Error as e:
-            print("Error in file removal")
-            print(e)
-            print("\nExiting")
-            return 1
+                print("... Done")
+            except Error as e:
+                print("Error in file removal")
+                print(e)
+                print("\nExiting")
+                return 1
 
-        if not build_galaxy_pixel_relation:
-            print("Skipping galaxy-pixel relation...")
-        else:
-            pass
-            # print("Building galaxy-pixel relation...")
-            # # 1. Select all Galaxies from GD2
-            # # 2. Resolve all Galaxies to a HealpixPixel index/id
-            # # 3. Store HealpixPixel_Galaxy association
-            # t1 = time.time()
-            # galaxy_select = '''
-            #     SELECT 	id,
-            #             PGC,
-            #             Name_GWGC,
-            #             Name_HyperLEDA,
-            #             Name_2MASS,
-            #             Name_SDSS_DR12,
-            #             RA,
-            #             _Dec,
-            #             Coord,
-            #             dist,
-            #             dist_err,
-            #             z_dist,
-            #             z_dist_err,
-            #             z,
-            #             B,
-            #             B_err,
-            #             B_abs,
-            #             J,
-            #             J_err,
-            #             H,
-            #             H_err,
-            #             K,
-            #             K_err,
-            #             flag1,
-            #             flag2,
-            #             flag3,
-            #             N2_Pixel_Index,
-            #             N4_Pixel_Index,
-            #             N8_Pixel_Index,
-            #             N16_Pixel_Index,
-            #             N32_Pixel_Index,
-            #             N64_Pixel_Index,
-            #             N128_Pixel_Index,
-            #             N256_Pixel_Index,
-            #             N512_Pixel_Index,
-            #             N1024_Pixel_Index,
-            #             %s
-            #     FROM Galaxy
-            #     WHERE z_dist < 1206.0
-            # '''
-            # galaxy_result = query_db([galaxy_select % map_nside])[0]
-            # print("Number of Galaxies: %s" % len(galaxy_result))
-            # t2 = time.time()
-            # print("\n********* start DEBUG ***********")
-            # print("Galaxy select execution time: %s" % (t2 - t1))
-            # print("********* end DEBUG ***********\n")
-            #
-            # t1 = time.time()
-            #
-            # with mp.Pool() as pool:
-            #     galaxy_pixel_relations = pool.map(get_healpix_pixel_id, galaxy_result)
-            #
-            # galaxy_pixel_data = []
-            # for gp in galaxy_pixel_relations:
-            #     _pixel_index = gp[1]
-            #     _pixel_id = map_pixel_dict[_pixel_index][0]
-            #     _galaxy_id = gp[0]
-            #     galaxy_pixel_data.append((_pixel_id, _galaxy_id))
-            #
-            # t2 = time.time()
-            # print("\n********* start DEBUG ***********")
-            # print("Galaxy-pixel creation execution time: %s" % (t2 - t1))
-            # print("********* end DEBUG ***********\n")
-            #
-            # # Create CSV, upload, and clean up CSV
-            # galaxy_pixel_upload_csv = "%s/%s_gal_pix_upload.csv" % (formatted_healpix_dir, gw_id)
-            # try:
-            #     t1 = time.time()
-            #     print("Creating `%s`" % galaxy_pixel_upload_csv)
-            #     with open(galaxy_pixel_upload_csv, 'w') as csvfile:
-            #         csvwriter = csv.writer(csvfile)
-            #         for data in galaxy_pixel_data:
-            #             csvwriter.writerow(data)
-            #
-            #     t2 = time.time()
-            #     print("\n********* start DEBUG ***********")
-            #     print("CSV creation execution time: %s" % (t2 - t1))
-            #     print("********* end DEBUG ***********\n")
-            # except Error as e:
-            #     print("Error in creating CSV:\n")
-            #     print(e)
-            #     print("\nExiting")
-            #     return 1
-            #
-            # t1 = time.time()
-            # upload_sql = """LOAD DATA LOCAL INFILE '%s'
-            #         INTO TABLE HealpixPixel_Galaxy
-            #         FIELDS TERMINATED BY ','
-            #         LINES TERMINATED BY '\n'
-            #         (HealpixPixel_id, Galaxy_id);"""
-            #
-            # success = bulk_upload(upload_sql % galaxy_pixel_upload_csv)
-            # if not success:
-            #     print("\nUnsuccessful bulk upload. Exiting...")
-            #     return 1
-            #
-            # t2 = time.time()
-            # print("\n********* start DEBUG ***********")
-            # print("CSV upload execution time: %s" % (t2 - t1))
-            #
-            # try:
-            #     print("Removing `%s`..." % galaxy_pixel_upload_csv)
-            #     os.remove(galaxy_pixel_upload_csv)
-            #
-            #     # Clean up
-            #     print("freeing `galaxy_pixel_data`...")
-            #     del galaxy_pixel_data
-            #
-            #     print("... Done")
-            # except Error as e:
-            #     print("Error in file removal")
-            #     print(e)
-            #     print("\nExiting")
-            #     return 1
+            if not build_galaxy_pixel_relation:
+                print("Skipping galaxy-pixel relation...")
+            else:
+                pass
+                # print("Building galaxy-pixel relation...")
+                # # 1. Select all Galaxies from GD2
+                # # 2. Resolve all Galaxies to a HealpixPixel index/id
+                # # 3. Store HealpixPixel_Galaxy association
+                # t1 = time.time()
+                # galaxy_select = '''
+                #     SELECT 	id,
+                #             PGC,
+                #             Name_GWGC,
+                #             Name_HyperLEDA,
+                #             Name_2MASS,
+                #             Name_SDSS_DR12,
+                #             RA,
+                #             _Dec,
+                #             Coord,
+                #             dist,
+                #             dist_err,
+                #             z_dist,
+                #             z_dist_err,
+                #             z,
+                #             B,
+                #             B_err,
+                #             B_abs,
+                #             J,
+                #             J_err,
+                #             H,
+                #             H_err,
+                #             K,
+                #             K_err,
+                #             flag1,
+                #             flag2,
+                #             flag3,
+                #             N2_Pixel_Index,
+                #             N4_Pixel_Index,
+                #             N8_Pixel_Index,
+                #             N16_Pixel_Index,
+                #             N32_Pixel_Index,
+                #             N64_Pixel_Index,
+                #             N128_Pixel_Index,
+                #             N256_Pixel_Index,
+                #             N512_Pixel_Index,
+                #             N1024_Pixel_Index,
+                #             %s
+                #     FROM Galaxy
+                #     WHERE z_dist < 1206.0
+                # '''
+                # galaxy_result = query_db([galaxy_select % map_nside])[0]
+                # print("Number of Galaxies: %s" % len(galaxy_result))
+                # t2 = time.time()
+                # print("\n********* start DEBUG ***********")
+                # print("Galaxy select execution time: %s" % (t2 - t1))
+                # print("********* end DEBUG ***********\n")
+                #
+                # t1 = time.time()
+                #
+                # with mp.Pool() as pool:
+                #     galaxy_pixel_relations = pool.map(get_healpix_pixel_id, galaxy_result)
+                #
+                # galaxy_pixel_data = []
+                # for gp in galaxy_pixel_relations:
+                #     _pixel_index = gp[1]
+                #     _pixel_id = map_pixel_dict[_pixel_index][0]
+                #     _galaxy_id = gp[0]
+                #     galaxy_pixel_data.append((_pixel_id, _galaxy_id))
+                #
+                # t2 = time.time()
+                # print("\n********* start DEBUG ***********")
+                # print("Galaxy-pixel creation execution time: %s" % (t2 - t1))
+                # print("********* end DEBUG ***********\n")
+                #
+                # # Create CSV, upload, and clean up CSV
+                # galaxy_pixel_upload_csv = "%s/%s_gal_pix_upload.csv" % (formatted_healpix_dir, gw_id)
+                # try:
+                #     t1 = time.time()
+                #     print("Creating `%s`" % galaxy_pixel_upload_csv)
+                #     with open(galaxy_pixel_upload_csv, 'w') as csvfile:
+                #         csvwriter = csv.writer(csvfile)
+                #         for data in galaxy_pixel_data:
+                #             csvwriter.writerow(data)
+                #
+                #     t2 = time.time()
+                #     print("\n********* start DEBUG ***********")
+                #     print("CSV creation execution time: %s" % (t2 - t1))
+                #     print("********* end DEBUG ***********\n")
+                # except Error as e:
+                #     print("Error in creating CSV:\n")
+                #     print(e)
+                #     print("\nExiting")
+                #     return 1
+                #
+                # t1 = time.time()
+                # upload_sql = """LOAD DATA LOCAL INFILE '%s'
+                #         INTO TABLE HealpixPixel_Galaxy
+                #         FIELDS TERMINATED BY ','
+                #         LINES TERMINATED BY '\n'
+                #         (HealpixPixel_id, Galaxy_id);"""
+                #
+                # success = bulk_upload(upload_sql % galaxy_pixel_upload_csv)
+                # if not success:
+                #     print("\nUnsuccessful bulk upload. Exiting...")
+                #     return 1
+                #
+                # t2 = time.time()
+                # print("\n********* start DEBUG ***********")
+                # print("CSV upload execution time: %s" % (t2 - t1))
+                #
+                # try:
+                #     print("Removing `%s`..." % galaxy_pixel_upload_csv)
+                #     os.remove(galaxy_pixel_upload_csv)
+                #
+                #     # Clean up
+                #     print("freeing `galaxy_pixel_data`...")
+                #     del galaxy_pixel_data
+                #
+                #     print("... Done")
+                # except Error as e:
+                #     print("Error in file removal")
+                #     print(e)
+                #     print("\nExiting")
+                #     return 1
 
         # clean up
         print("freeing `prob`...")

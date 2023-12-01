@@ -29,12 +29,12 @@ from web.src.utilities.filesystem_utilties import *
 start = time.time()
 
 
-plot_dust = False
-plot_contours = False
+plot_dust = True
+plot_contours = True
 plot_tiles = True
 plot_cutout = True
-plot_pixels = False
-plot_sun = False
+plot_pixels = True
+plot_sun = True
 
 
 nside128 = 128
@@ -173,33 +173,45 @@ if plot_dust:
 if plot_contours:
     for ax_name, ax in axes.items():
         _2d_contours = ax.contour_hpx(_90_50_levels_2d, colors=['None', 'black', 'black'], levels=[0.0, 0.5, 0.9],
-                                      linewidths=0.60, alpha=1.0)
+                                      linewidths=0.60, alpha=1.0, zorder=9999)
 
         plt.setp(_2d_contours.collections, path_effects=[path_effects.withStroke(linewidth=1.0, foreground='black',
-                                                                                 alpha=0.1)])
+                                                                                 alpha=0.1)], zorder=9999)
 
 # region SELECT Tiles
+# detector_select = '''
+#             SELECT
+#                 d.id,
+#                 d.Name,
+#                 d.ST_AsText(Poly)
+#             FROM Detector d
+#             JOIN DetectorPlot dp on dp.Detector_id = d.id
+#             JOIN ObservedTile ot on ot.Detector_id = d.id
+#             WHERE ot.HealpixMap_id = 1;
+#         '''
 detector_select = '''
-            SELECT id, Name, ST_AsText(Poly) FROM Detector; 
-        '''
+    SELECT 
+        DISTINCT d.id, 
+        d.Name, 
+        ST_AsText(d.Poly),
+        dp.Display_Name,
+        dp.Color,
+        dp.Size,
+        dp.Linewidth,
+        dp.Alpha,
+        dp.zOrder
+    FROM Detector d
+    JOIN DetectorPlot dp on dp.Detector_id = d.id;
+'''
 detector_result = query_db([detector_select])[0]
 
-detect_display_name_dict = {
-    1: "Swope",  # Swope
-    2: "ANDICAM\nCCD",  # ANDICAM-CCD
-    3: "Thacher",  # THACHER
-    4: "Nickel",  # NICKEL
-    7: "Las Cumbres",  # LCOGT
-    11: "CSS",  # CSS
-    12: r"${\it Swift}$",  # Swift
-    13: "MMTCam",  # MMT
-    46: "ZTF",  # ZTF
-    45: "GOTO-4",  # GOTO-4
-    51: "ANDICAM\nIR",  # ANDICAM-IR,
-    52:"ATLAS", # ATLAS
-    54: "PS1\nSkycell", # Pan-STARRS1_skycell
-    6: "KAIT" # KAIT
-}
+detect_display_name_dict = { int(dr[0]): dr[3] for dr in detector_result }
+tile_color_dict = { int(dr[0]): dr[4] for dr in detector_result }
+tile_marker_size_dict = { int(dr[0]): int(dr[5]) for dr in detector_result }
+tile_linewidth_dict = { int(dr[0]): float(dr[6]) for dr in detector_result }
+tile_alpha_dict = { int(dr[0]): float(dr[7]) for dr in detector_result }
+tile_zorder_dict = { int(dr[0]): int(dr[8]) for dr in detector_result }
+patheffect_coefficient = 1.08
 
 detectors = {}
 for dr in detector_result:
@@ -209,7 +221,8 @@ for dr in detector_result:
                                  Detector.get_detector_vertices_from_teglon_db(dr[2]),
                                   detector_id=id)
 
-observed_tile_select = '''
+# Hack, don't get PS1 sky cells...
+observed_tile_select1 = '''
         SELECT 
             OT.id, 
             OT.RA, 
@@ -218,51 +231,21 @@ observed_tile_select = '''
             D.Area
         FROM ObservedTile OT
         JOIN Detector D on OT.Detector_id = D.id
-        ORDER BY D.Area DESC;
+        # WHERE D.id = 111
+        ORDER BY D.Area DESC
     '''
-ot_result = query_db([observed_tile_select])[0]
+ot_result1 = query_db([observed_tile_select1])[0]
 
-tile_color_dict = {
-    1: "black",  # Swope
-    2: "blueviolet",  # ANDICAM-CCD
-    3: "magenta",  # THACHER
-    4: "cyan",  # NICKEL
-    7: "gold",  # LCOGT
-    11: "lime",  # CSS
-    12: "orangered",  # Swift
-    13: "dodgerblue",  # MMT
-    46: "royalblue",  # ZTF
-    45: "orange",  # GOTO-4
-    51: "yellowgreen",  # ANDICAM-IR
-    52: "peru", # ATLAS
-    54: "red", # Pan-STARRS1_skycell
-    6: "grey" # KAIT
-}
-
-tile_marker_size_dict = {
-    1: 8,  # Swope
-    2: 3,  # ANDICAM-CCD
-    3: 7,  # THACHER
-    4: 3,  # NICKEL
-    7: 7,  # LCOGT
-    11: 10,  # CSS
-    12: 4,  # Swift
-    13: 3,  # MMT
-    46: 20,  # ZTF
-    45: 15,  # GOTO-4
-    51: 2,  # ANDICAM-IR
-    52: 17,  # ATLAS
-    54: 7,  # Pan-STARRS1_skycell
-    6: 3 # KAIT
-}
-
-ZTF_id = 20
+# ZTF_id = 20
 # KAIT_id = 6
-ZTF_approx_id = 46
+# ZTF_approx_id = 46
+ZTF_id = 74
+KAIT_id = 60
+ZTF_approx_id = 100
 
 big_tile_list = []
 little_tile_list = []
-for ot in ot_result:
+for ot in ot_result1:
     detector_id = int(ot[3])
     area = float(ot[4])
 
@@ -278,6 +261,27 @@ for ot in ot_result:
         big_tile_list.append(t)
     else:
         little_tile_list.append(t)
+
+# observed_tile_select2 = '''
+#         SELECT
+#             OT.id,
+#             OT.RA,
+#             OT._Dec,
+#             OT.Detector_id,
+#             D.Area
+#         FROM ObservedTile OT
+#         JOIN Detector D on OT.Detector_id = D.id
+#         WHERE D.id = 111 AND FieldName LIKE '%.044%';
+#     '''
+# ot_result2 = query_db([observed_tile_select2])[0]
+# for ot in ot_result2:
+#     detector_id = 112 # Hack for Projection Cells
+#
+#     t = Tile(float(ot[1]), float(ot[2]), nside=healpix_map_nside,
+#              detector=detectors[detector_id], plot_color=tile_color_dict[detector_id])
+#
+#     big_tile_list.append(t)
+
 # endregion
 
 x1, y1 = (0, 0)
@@ -286,23 +290,26 @@ if plot_tiles:
 
     ax_west = axes["west"]
     all_tile_list = big_tile_list + little_tile_list
+
     for t in all_tile_list:
         r, g, b = colors.to_rgb(t.plot_color)
         edg_clr = (r, g, b, 1.0)
         face_clr = (r, g, b, 0.1)
+        # face_clr = "None"
 
         if t.detector.name not in legend_labels:
             legend_labels.append(t.detector.name)
             mkr = 's'
             ax.plot(x1, y1, marker=mkr, alpha=1.0, markeredgecolor=edg_clr,
-                    markerfacecolor=face_clr, markersize=tile_marker_size_dict[t.detector.id],
-                    label=t.detector.name, linestyle='None')
+                    markerfacecolor="None", markersize=tile_marker_size_dict[t.detector.id],
+                    label=t.detector.name, linestyle='None', markeredgewidth=2.0)
+
+
 
     for ax_name, ax in axes.items():
 
-
-
         for t in big_tile_list:
+            # r, g, b = colors.to_rgb(t.plot_color)
             r, g, b = colors.to_rgb(t.plot_color)
             edg_clr = (r, g, b, 1.0)
             face_clr = (r, g, b, 0.1)
@@ -316,7 +323,12 @@ if plot_tiles:
             #
             #             tt.plot2(ax, facecolor=_face_clr, edgecolor=_edg_clr, linewidth=0.05, alpha=0.25)
 
-            t.plot2(ax, facecolor=face_clr, edgecolor=edg_clr, linewidth=0.25)
+            # t.plot2(ax, facecolor=face_clr, edgecolor=edg_clr, linewidth=0.25)
+            pe_stroke = tile_linewidth_dict[t.detector.id] * patheffect_coefficient
+            t.plot2(ax, facecolor="None", edgecolor=edg_clr, linewidth=tile_linewidth_dict[t.detector.id],
+                    alpha=tile_alpha_dict[t.detector.id], zorder=tile_zorder_dict[t.detector.id],
+                    path_effects=[path_effects.withStroke(linewidth=pe_stroke, foreground='black',
+                                                                             alpha=tile_alpha_dict[t.detector.id])])
 
 
 
@@ -325,10 +337,15 @@ if plot_tiles:
             edg_clr = (r, g, b, 1.0)
             face_clr = (r, g, b, 0.1)
 
-            if t.detector.id == 54:  # "Pan-STARRS1_skycell":
-                continue
+            # if t.detector.id == 54:  # "Pan-STARRS1_skycell":
+            #     continue
 
-            t.plot2(ax, facecolor=face_clr, edgecolor=edg_clr, linewidth=0.25)
+            # t.plot2(ax, facecolor=face_clr, edgecolor=edg_clr, linewidth=0.25)
+            pe_stroke = tile_linewidth_dict[t.detector.id] * patheffect_coefficient
+            t.plot2(ax, facecolor="None", edgecolor=edg_clr, linewidth=tile_linewidth_dict[t.detector.id],
+                    alpha=tile_alpha_dict[t.detector.id], zorder=tile_zorder_dict[t.detector.id],
+                    path_effects=[path_effects.withStroke(linewidth=pe_stroke, foreground='black',
+                                                                             alpha=tile_alpha_dict[t.detector.id])])
 
 
 if plot_cutout:
@@ -339,7 +356,7 @@ if plot_cutout:
         [0.545, 0.5, 0.35, 0.35],  # for position 2
         projection='astro degrees zoom',
         center='245d +20d',
-        radius='12 deg')
+        radius='12 deg', zorder=9999)
         # radius='10 deg')
 
     contour_fmt_dict = {
@@ -348,13 +365,13 @@ if plot_cutout:
     }
 
     _2d_contours = axes["inset"].contour_hpx(_90_50_levels_2d, colors=['None', 'black', 'black'],
-                                             levels=[0.0, 0.5, 0.9], linewidths=0.5, alpha=1.0)
+                                             levels=[0.0, 0.5, 0.9], linewidths=0.6, alpha=1.0, zorder=9999)
     # path_effects = [path_effects.withStroke(linewidth=1.0, foreground='black')]
 
     plt.setp(_2d_contours.collections, path_effects=[path_effects.withStroke(linewidth=2.5, foreground='black',
                                                                              alpha=0.1)])
 
-    clbls = axes["inset"].clabel(_2d_contours, inline=True, fontsize=9, fmt=contour_fmt_dict, inline_spacing=10.0)
+    clbls = axes["inset"].clabel(_2d_contours, inline=True, fontsize=9, fmt=contour_fmt_dict, inline_spacing=10.0, zorder=9999)
 
     if plot_pixels:
 
@@ -428,7 +445,11 @@ if plot_cutout:
 
     for t in big_tile_list:
         # t.plot2(axes["inset"], facecolor=t.plot_color, edgecolor='None', alpha=0.1)
-        t.plot2(axes["inset"], facecolor='None', edgecolor=t.plot_color, linewidth=0.5, alpha=1.0)
+        pe_stroke = tile_linewidth_dict[t.detector.id] * patheffect_coefficient
+        t.plot2(axes["inset"], facecolor='None', edgecolor=t.plot_color, linewidth=tile_linewidth_dict[t.detector.id],
+                    alpha=tile_alpha_dict[t.detector.id], zorder=tile_zorder_dict[t.detector.id],
+                    path_effects=[path_effects.withStroke(linewidth=pe_stroke, foreground='black',
+                                                                             alpha=tile_alpha_dict[t.detector.id])])
 
     for t in little_tile_list:
 
@@ -440,14 +461,25 @@ if plot_cutout:
         # if t.detector.id == 54:  # "Pan-STARRS1_skycell":
         #     continue
 
-        t.plot2(axes["inset"], facecolor=t.plot_color, edgecolor='None', alpha=alpha1)
-        t.plot2(axes["inset"], facecolor='None', edgecolor=t.plot_color, linewidth=0.5, alpha=alpha2)
+        # t.plot2(axes["inset"], facecolor=t.plot_color, edgecolor='None', alpha=alpha1)
+        pe_stroke = tile_linewidth_dict[t.detector.id] * patheffect_coefficient
+        t.plot2(axes["inset"], facecolor='None', edgecolor=t.plot_color, linewidth=tile_linewidth_dict[t.detector.id],
+                    alpha=tile_alpha_dict[t.detector.id], zorder=tile_zorder_dict[t.detector.id],
+                    path_effects=[path_effects.withStroke(linewidth=pe_stroke, foreground='black',
+                                                                             alpha=tile_alpha_dict[t.detector.id])])
 
-    axes["east"].mark_inset_axes(axes["inset"])
+    axes["east"].mark_inset_axes(axes["inset"], zorder=9999)
     # axes["east"].mark_inset_circle(axes["inset"], '245d +20d', '20 deg')
     # axes["east"].connect_inset_circle(axes["inset"], '245d +20d', '12 deg')
-    axes["east"].connect_inset_axes(axes["inset"], 'upper left')
-    axes["east"].connect_inset_axes(axes["inset"], 'lower left')
+
+    # from matplotlib.patches import ConnectionPatch
+    # xy = (x[i], y[i])
+    # con = ConnectionPatch(xyA=xy, xyB=xy, coordsA="data", coordsB="data",
+    #                       axesA=ax2, axesB=ax1, color="red")
+
+    # Why doesn't this code work?
+    # axes["east"].connect_inset_axes(axes["inset"], 'upper left')
+    # axes["east"].connect_inset_axes(axes["inset"], 'lower left')
 
     axes["inset"].grid(color='black', linestyle=':', linewidth=0.25)
     axes["inset"].tick_params(axis='both', colors='black')

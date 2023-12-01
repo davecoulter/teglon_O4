@@ -6,7 +6,6 @@ from matplotlib.ticker import ScalarFormatter
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-from mpl_toolkits.basemap import Basemap
 from matplotlib.patches import Polygon
 from matplotlib.pyplot import cm
 from matplotlib.patches import CirclePolygon
@@ -49,7 +48,7 @@ G_CGS = c.G.cgs.value
 R_NS_CGS = 20e5  # NS radius cm == 20 km
 
 is_log = False
-blue_kn = False  # else, red_kn
+blue_kn = True  # else, red_kn
 is_poster_plot = False
 
 is_Ye_0_05 = False
@@ -69,7 +68,8 @@ start_file = 0
 end_file = 112
 
 if is_Ye_0_10:
-    ye_thresh = 0.10
+    # ye_thresh = 0.10 # this is for Ye
+    ye_thresh = 10.0 # this is for Kappa
     start_file = 112
     end_file = 224
 elif is_Ye_0_20:
@@ -85,7 +85,10 @@ elif is_Ye_0_40:
     start_file = 448
     end_file = 560
 elif is_Ye_0_45:
-    ye_thresh = 0.45
+    # ye_thresh = 0.45 # this is for Ye
+
+    # This is a HACk to use Kappa = 0.1
+    ye_thresh = 1.0 # this is for Kappa
     start_file = 560
     end_file = 672
 
@@ -106,8 +109,8 @@ model_tups = []
 #             model_tups.append((vej[j], mej[j], prob[j]))
 
 # 0817 + 0425 props
-# red_kn_props = (0.15, 0.035, 0.1)
-# blue_kn_props = (0.25, 0.025, 0.45)  # vej, mej, ye
+red_kn_props = (0.15, 0.035, 0.1)
+blue_kn_props = (0.25, 0.025, 0.45)  # vej, mej, ye
 
 
 
@@ -127,7 +130,7 @@ model_tups = []
 # # Debug - high velocity, high mass
 # red_kn_props = (0.3, 0.3, 0.1)  # vej, mej, ye
 # Debug - high velocity, low mass
-red_kn_props = (0.3, 0.1, 0.1)  # vej, mej, ye
+# red_kn_props = (0.3, 0.1, 0.1)  # vej, mej, ye
 
 
 
@@ -146,30 +149,38 @@ utilized_vej = []
 test = []
 
 utilized_prob = []
-for i in range(36):
+# for i in range(36):
+for i in range(39):
     sub_dir = i + 1
     file_num = i + 1
     f_path = "./web/events/S190425z/model_detection/kne/Detection_KNe_%i.prob" % file_num
+    print("loading %s" % f_path)
     # f_path = "../Events/S190814bv/ModelDetection/Detection_KNe_%i.prob" % file_num
     # f_path = "../Events/S190425z/ModelDetection/Detection_KNe_%i.prob" % file_num
     # f_path = "../Events/S190425z/ModelDetection.old/Detection_KNe_%i.prob" % file_num
     results_table = Table.read(f_path, format='ascii.ecsv')
 
-    vej = list(results_table['vej'])
-    mej = list(results_table['mej'])
-    ye = list(results_table['ye'])
+    # vej = list(results_table['vej'])
+    # mej = list(results_table['mej'])
+    # ye = list(results_table['ye'])
+    vej = list(results_table['velocity'])
+    mej = list(results_table['mass'])
+    ye = list(results_table['kappa'])
     prob = list(results_table['Prob'])
 
     for j, y in enumerate(ye):
 
         if y == ye_thresh:
             model_tups.append((vej[j], mej[j], prob[j]))
+            # hack
+            # utilized_mej += mej
 
-            if mej[j] >= 0.5 and vej[j] >= v_critical:
-                test.append((vej[j], mej[j], prob[j]))
-                utilized_prob.append(prob[j])
-                utilized_mej.append(mej[j])
-                utilized_vej.append(vej[j])
+            # if mej[j] >= 0.5 and vej[j] >= v_critical:
+            # if
+            # test.append((vej[j], mej[j], prob[j]))
+            utilized_prob.append(prob[j])
+            utilized_mej.append(mej[j])
+            utilized_vej.append(vej[j])
 
             if blue_kn:
                 blue_sep = np.sqrt((blue_kn_props[0] - vej[j]) ** 2 + (blue_kn_props[1] - mej[j]) ** 2 + (
@@ -186,7 +197,8 @@ for i in range(36):
                     closest_red = [vej[j], mej[j], ye[j]]
                     closest_sub_dir = sub_dir
 
-print("Max Raw Prob %s" % np.max(utilized_prob))
+# print("Max Raw Prob %s" % np.max(utilized_prob))
+print("Max mass: %s" % np.max(utilized_mej))
 
 if blue_kn:
     print("Blue")
@@ -201,8 +213,8 @@ else:
 
 print("Done reading in data... %s rows" % len((model_tups)))
 
-# Debug exit
-raise Exception("Stop!")
+# # Debug exit
+# raise Exception("Stop!")
 
 
 all_vej = np.asarray([mt[0] for mt in model_tups])
@@ -465,7 +477,7 @@ if not is_poster_plot:
 if blue_kn:
     # SSS17a - Blue KN
     #deepskyblue
-    e = ax.errorbar(0.25, 0.025, fmt="*", mfc="black", mec="black", ecolor="black",
+    e = ax.errorbar(0.25, 0.025, fmt="*", mfc="black", mec="white", ecolor="black",
                     elinewidth=1.0, ms=24.0, zorder=9999, mew=1.5)
     print("Prob of blue KN: %s" % griddata(points, values, (0.25, 0.025)))
 

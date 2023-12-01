@@ -31,7 +31,7 @@ import astropy.time
 # import math
 # from matplotlib.patches import Polygon
 from shapely import geometry
-from mpl_toolkits.basemap import Basemap
+# from mpl_toolkits.basemap import Basemap
 
 # from configparser import RawConfigParser
 # import mysql.connector
@@ -737,8 +737,10 @@ if is_debug:
 
                 fig = plt.figure(figsize=(20, 15), dpi=1000)
                 ax = fig.add_subplot(111)
-                m = Basemap(projection='moll', lon_0=180.0)
 
+                # TODO: is this crap needed?
+                # m = Basemap(projection='moll', lon_0=180.0)
+                m = None
                 for p in pix:
                     p.plot(m, ax, edgecolor='black', linewidth=0.1, facecolor='None', alpha=1.0)
 
@@ -780,7 +782,9 @@ if is_debug:
             if mollweide:
                 fig = plt.figure(figsize=(20, 15))
                 ax = fig.add_subplot(111)
-                m = Basemap(projection='moll', lon_0=180.0)
+                # TODO: Is this crap needed?
+                m = None
+                # m = Basemap(projection='moll', lon_0=180.0)
 
                 for p in mwe_pix:
                     p.plot(m, ax, edgecolor='None', linewidth=0.5, facecolor='cornflowerblue', alpha=0.2)
@@ -822,7 +826,9 @@ if is_debug:
             if east:
                 fig = plt.figure(figsize=(10, 10), dpi=1000)
                 ax = fig.add_subplot(111)
-                m = Basemap(projection='ortho', lon_0=240.0, lat_0=20.0)
+                # m = Basemap(projection='ortho', lon_0=240.0, lat_0=20.0)
+                # TODO: Is this crap needed?
+                m = None
 
 
                 for p in mwe_pix:
@@ -871,7 +877,9 @@ if is_debug:
             if west:
                 fig = plt.figure(figsize=(10, 10), dpi=1000)
                 ax = fig.add_subplot(111)
-                m = Basemap(projection='ortho', lon_0=60.0, lat_0=-30.0)
+                # m = Basemap(projection='ortho', lon_0=60.0, lat_0=-30.0)
+                # TODO: Is this crap needed?
+                m = None
 
                 sql_inner_poly.plot(m, ax, edgecolor='k', linewidth=0.75, facecolor='None')
                 sql_outer_poly.plot(m, ax, edgecolor='k', linewidth=0.5, facecolor='None')
@@ -920,17 +928,19 @@ if is_debug:
             lat_0 = -20.0
             lon_0 = 15.0
 
-            m = Basemap(projection='stere',
-                        lon_0=lon_0,
-                        lat_0=lat_0,
-                        # llcrnrlat=-35.0,
-                        # urcrnrlat=-19.5,
-                        # llcrnrlon=8.0,
-                        # urcrnrlon=24.5)
-                        llcrnrlat=-37.0,
-                        urcrnrlat=-19.5,
-                        llcrnrlon=8.0,
-                        urcrnrlon=26.5)
+            # m = Basemap(projection='stere',
+            #             lon_0=lon_0,
+            #             lat_0=lat_0,
+            #             # llcrnrlat=-35.0,
+            #             # urcrnrlat=-19.5,
+            #             # llcrnrlon=8.0,
+            #             # urcrnrlon=24.5)
+            #             llcrnrlat=-37.0,
+            #             urcrnrlat=-19.5,
+            #             llcrnrlon=8.0,
+            #             urcrnrlon=26.5)
+            # TODO: Is this crap needed?
+            m = None
 
             ra_0 = 20.0
             dec_0 = -25.0
@@ -1071,13 +1081,15 @@ if is_debug:
             lat_0 = 70.0
             lon_0 = 15.0
 
-            m = Basemap(projection='stere',
-                        lon_0=lon_0,
-                        lat_0=lat_0,
-                        llcrnrlat=80.0,
-                        urcrnrlat=85.0,
-                        llcrnrlon=10.0,
-                        urcrnrlon=20.0)
+            # m = Basemap(projection='stere',
+            #             lon_0=lon_0,
+            #             lat_0=lat_0,
+            #             llcrnrlat=80.0,
+            #             urcrnrlat=85.0,
+            #             llcrnrlon=10.0,
+            #             urcrnrlon=20.0)
+            # TODO: Is this crap needed?
+            m = None
 
             plotted = []
             for t in swope_tiles:
