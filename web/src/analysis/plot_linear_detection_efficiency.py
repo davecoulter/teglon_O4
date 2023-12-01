@@ -5,7 +5,6 @@ matplotlib.use("Agg")
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-from mpl_toolkits.basemap import Basemap
 from matplotlib.patches import Polygon
 from matplotlib.pyplot import cm
 from matplotlib.patches import CirclePolygon
