@@ -2,14 +2,14 @@
 
 start=$SECONDS
 
-START=1
-END=39
+START=2
+END=58
 
 GW_ID='S190425z'
 HEALPIX_FILE='GW190425_PublicationSamples_flattened.fits.gz'
 NUM_CPU=7
 MODEL_TYPE=kne
-BATCH_DIR=onaxis
+#BATCH_DIR=onaxis
 
 #manual_dirs=(10 17 20 27 30 37 40 47 50 57 60 67 70 73)
 

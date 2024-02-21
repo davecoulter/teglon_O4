@@ -20,6 +20,7 @@ from scipy.integrate import simps, quad
 from scipy import interpolate
 # from scipy.interpolate import interp1d, interp2d, spline
 import scipy as sp
+import os,shutil,glob,sys
 
 print(sp.__version__)
 
@@ -48,7 +49,7 @@ G_CGS = c.G.cgs.value
 R_NS_CGS = 20e5  # NS radius cm == 20 km
 
 is_log = False
-blue_kn = True  # else, red_kn
+blue_kn = False  # else, red_kn
 is_poster_plot = False
 
 is_Ye_0_05 = False
@@ -69,7 +70,8 @@ end_file = 112
 
 if is_Ye_0_10:
     # ye_thresh = 0.10 # this is for Ye
-    ye_thresh = 10.0 # this is for Kappa
+    ye_thresh = 3.65  # this is for Kappa
+    # ye_thresh = 10.0 # this is for Kappa
     start_file = 112
     end_file = 224
 elif is_Ye_0_20:
@@ -88,7 +90,7 @@ elif is_Ye_0_45:
     # ye_thresh = 0.45 # this is for Ye
 
     # This is a HACk to use Kappa = 0.1
-    ye_thresh = 1.0 # this is for Kappa
+    ye_thresh = 0.5 # this is for Kappa
     start_file = 560
     end_file = 672
 
@@ -109,9 +111,30 @@ model_tups = []
 #             model_tups.append((vej[j], mej[j], prob[j]))
 
 # 0817 + 0425 props
-red_kn_props = (0.15, 0.035, 0.1)
-blue_kn_props = (0.25, 0.025, 0.45)  # vej, mej, ye
+# red_kn_props = (0.15, 0.035, 10.0) # From Kilpatrick
+# # red_kn_props = (0.14, 0.011, 10.0) # From Villar
+# blue_kn_props = (0.25, 0.025, 1.0)  # vej, mej, Kappa, From Kilpatrick
+# blue_kn_props = (0.27, 0.020, 1.0)  # From Villar
 
+
+blue_kn_props = (0.256, 0.023, 0.5)  # From Villar
+red_kn_props = (0.149, 0.050, 3.0)  # From Villar
+
+# 1.4 + 2.0 NS
+_0425_red_kn_props_1 = (0.15, 0.039, 10.0)  # From Foley 0425
+
+# 1.6 + 1.6 NS
+_0425_red_kn_props_2 = (0.11, 0.020, 10.0)  # From Foley 0425
+
+red_props_dict = {
+    3.650: {
+        "AT 2017gfo-like\nRed Component": red_kn_props,
+    },
+    10.0: {
+        "1.4 + 2.0": _0425_red_kn_props_1,
+        "1.6 + 1.6": _0425_red_kn_props_2
+    }
+}
 
 
 # # Debug - low velocity, high mass
@@ -149,23 +172,38 @@ utilized_vej = []
 test = []
 
 utilized_prob = []
+
+# get all files
+kn_files = glob.glob("./web/events/S190425z/model_detection/kne/Detection_KNe_*.prob")
 # for i in range(36):
-for i in range(39):
-    sub_dir = i + 1
-    file_num = i + 1
-    f_path = "./web/events/S190425z/model_detection/kne/Detection_KNe_%i.prob" % file_num
+# for i in range(39):
+# for i in range(40):
+for f_path in kn_files:
+
+    base_file_name = os.path.basename(f_path)
+    sub_dir = int(base_file_name.split("_")[2].split(".")[0])
+
+    # sub_dir = i + 1
+    # file_num = i + 1
+    # # Villar path
+    # f_path = "./web/events/S190425z/model_detection/kne/Detection_KNe_%i.prob" % file_num
+
+    # Metzger path
+    # f_path = "./web/events/S190425z/model_detection/kne/metzger_models/Detection_KNe_%i.prob" % file_num
     print("loading %s" % f_path)
-    # f_path = "../Events/S190814bv/ModelDetection/Detection_KNe_%i.prob" % file_num
-    # f_path = "../Events/S190425z/ModelDetection/Detection_KNe_%i.prob" % file_num
-    # f_path = "../Events/S190425z/ModelDetection.old/Detection_KNe_%i.prob" % file_num
+
     results_table = Table.read(f_path, format='ascii.ecsv')
 
+    # Metzger models
     # vej = list(results_table['vej'])
     # mej = list(results_table['mej'])
     # ye = list(results_table['ye'])
+
+    # Villar models
     vej = list(results_table['velocity'])
     mej = list(results_table['mass'])
     ye = list(results_table['kappa'])
+
     prob = list(results_table['Prob'])
 
     for j, y in enumerate(ye):
@@ -202,9 +240,9 @@ print("Max mass: %s" % np.max(utilized_mej))
 
 if blue_kn:
     print("Blue")
-    print(closest_blue_sep)
-    print(closest_blue)
-    print(closest_sub_dir)
+    print("Closest separation: %s" % closest_blue_sep)
+    print("Closest model tup: %s" % closest_blue)
+    print("Closest sub dir: %s" % closest_sub_dir)
 else:
     print("Red")
     print(closest_red_sep)
@@ -221,16 +259,18 @@ all_vej = np.asarray([mt[0] for mt in model_tups])
 all_mej = np.asarray([mt[1] for mt in model_tups])
 points = [(mt[0], mt[1]) for mt in model_tups]
 values = [mt[2] for mt in model_tups]
+min_prob = np.min(values)
+max_prob = np.max(values)
+print("Max Raw Prob %s" % max_prob)
+
 
 model_vej = np.logspace(np.log10(np.min(all_vej)), np.log10(np.max(all_vej)), 1000)
 model_mej = np.logspace(np.log10(np.min(all_mej)), np.log10(np.max(all_mej)), 1000)
 grid_vej, grid_mej = np.meshgrid(model_vej, model_mej)
 # grid_vej, grid_mej = np.mgrid[model_vej[0]:model_vej[-1]:]
 grid_prob = griddata(points, values, (grid_vej, grid_mej), method='linear', rescale=True)
-min_prob = np.min(values)
-max_prob = np.max(values)
+print("Max Grid Prob %s" % np.max(grid_prob))
 
-print("Max Grid Prob %s" % max_prob)
 
 gamma = 1.0 / np.sqrt(1.0 - model_vej ** 2)
 grid_Mass_KE = grid_mej * (gamma - 1.0) * M_SUN_CGS * C_CGS ** 2  # ergs
@@ -243,6 +283,9 @@ red_norm = colors.Normalize(0.0, max_prob * 100)
 
 blue_tks = np.linspace(0.0, max_prob * 100, 6)
 red_tks = np.linspace(0.0, max_prob * 100, 6)
+
+print("Blue ticks: %s" % blue_tks)
+print("Red ticks: %s" % red_tks)
 
 # tks = [min_prob, 1.0e-9, 2.0e-9, 3.0e-9, 4.0e-9, 5.0e-9, max_prob]
 if is_log:
@@ -320,16 +363,15 @@ if blue_kn:
     test = grid_prob
 
     CS_lines = ax.contour(grid_vej, grid_mej, test, colors="mediumturquoise", linewidths=2.0,
-                          levels=[0.0, 0.01, 0.1, 0.25], zorder=9900)  # , 0.35
-    # CS_lines = ax.contour(grid_vej, grid_mej, test, colors="red", linewidths=2.0,
-    #                       levels=[0.0, 0.01, 0.1, 0.25, 0.3, 0.4, 0.5, max_prob], zorder=9900)  # , 0.35
+                          # levels=[0.0, 0.01, 0.1, 0.25], zorder=9900)  # , 0.35
+                          levels=[0.0, 0.1, 0.30, 0.40], zorder=9900)  # , 0.35
     plt.setp(CS_lines.collections, path_effects=[path_effects.withStroke(linewidth=3.0, foreground='black')])
 
     fmt_dict = {
         0.0: "",
-        0.01: "1%",
         0.10: "10%",
-        0.25: "25%",
+        0.30: "30%",
+        0.40: "40%"
         # 0.35:"35%"
     }
     # 0814
@@ -340,26 +382,49 @@ if blue_kn:
     # ]
     # 0425
     manual_locations = [
-        (2.0e-1, 7e-2),  # 25%
+        (2.0e-1, 7e-2),  # 30%
         (1.5e-1, 1e-2),  # 10%
-        (4.0e-2, 1.5e-3)  # 1%
+        (3.0e-1, 1.0e-1)  # 40%
     ]
-    clbls = ax.clabel(CS_lines, inline=True, fontsize=24, fmt=fmt_dict, inline_spacing=100.0, manual=manual_locations)
+    clbls = ax.clabel(CS_lines, inline=True, fontsize=24, fmt=fmt_dict, inline_spacing=50.0, manual=manual_locations)
     plt.setp(clbls, path_effects=[path_effects.withStroke(linewidth=3.0, foreground='black')], zorder=9900)
 else:
     print("here")
 
-    test = ndimage.gaussian_filter(grid_prob, sigma=2.8, order=0)
+    # test = ndimage.gaussian_filter(grid_prob, sigma=2.8, order=0)
+    test = grid_prob
+
+
+    lvls = [0.0, 0.01, 0.05]
+    fmt_dict = {
+        0.0: "",
+        0.01: "1%",
+        0.05: "5%"
+    }
+    manual_locations = [
+        (3.0e-1, 1.0e-1),  # 5%
+        (2e-1, 4.0e-3),  # 1%
+    ]
+
+    if ye_thresh == 10.0:
+        lvls = [0.0, 0.01]
+        fmt_dict = {
+            0.0: "",
+            0.01: "1%"
+        }
+        manual_locations = [
+            (3e-1, 1.5e-1),  # 1%
+        ]
 
     # grid_prob
     CS_lines = ax.contour(grid_vej, grid_mej, test, colors="mediumturquoise", linewidths=2.0,  # zorder=9900)
                           # levels=[0.0, 1e-11, 1e-10, 1e-9, 1e-8, 1e-7, 1e-6], zorder=9900)
 
-                          # For 0814
-                          # levels=[0.0, 0.4e-7, 2e-7], zorder=9900)
+                          # For 0817-like
+                          levels=lvls, zorder=9900)
 
                           # For 0425
-                          levels=[0.0, 1.0e-2], zorder=9900)
+                          # levels=[0.0, 1.0e-2], zorder=9900)
 
     CS_lines.set_clim(min_prob, max_prob)
     plt.setp(CS_lines.collections, path_effects=[path_effects.withStroke(linewidth=3.0, foreground='black')])
@@ -378,12 +443,23 @@ else:
     # }
 
     # For 0425
-    fmt_dict = {
-        0.0: "",
-        1e-2: r"1 %",
-    }
+    # fmt_dict = {
+    #     # 0.0: "",
+    #     # 0.1: "10%",
+    #     # 0.2: "20%",
+    #     # 0.3: "30%",
+    #     # 0.4: "40%"
+    #     0.0: "",
+    #     0.01: "1%",
+    #     0.05: "5%"
+    # }
 
-    clbls = ax.clabel(CS_lines, inline=True, fontsize=24, fmt=fmt_dict, inline_spacing=120.0)
+    # manual_locations = [
+    #     (3.0e-1, 1.0e-1),  # 5%
+    #     (2e-1, 4.0e-3),  # 1%
+    # ]
+
+    clbls = ax.clabel(CS_lines, inline=True, fontsize=24, fmt=fmt_dict, inline_spacing=120.0, manual=manual_locations)
     plt.setp(clbls, path_effects=[path_effects.withStroke(linewidth=3.0, foreground='black')], zorder=9900)
 
 # ax.text(8.8e-2, 2.3e-1, r"$U_{R_{20}} \geq KE$", rotation=31, fontsize=20, zorder=9999)
@@ -471,21 +547,28 @@ cb.ax.tick_params(length=8.0, width=2.0)
 
 # ax.text(1.5e-1, 2e-4, r"$Y_e$ = " + "%0.2f" % ye_thresh, fontsize=24, color="white",
 if not is_poster_plot:
-    ax.text(8e-2, 2e-3, r"$Y_e$ = " + "%0.2f" % ye_thresh, fontsize=32, color="white",
+    # ax.text(8e-2, 2e-3, r"$Y_e$ = " + "%0.2f" % ye_thresh, fontsize=32, color="white",
+    ax.text(8e-2, 2e-3, r"$\kappa$ = " + "%0.2f" % ye_thresh, fontsize=32, color="white",
             path_effects=[path_effects.withStroke(linewidth=3.5, foreground='black')], zorder=9999)
 
 if blue_kn:
+
+    # blue_kn_props = (0.256, 0.023, 0.5)  # From Villar
+    # red_kn_props = (0.149, 0.050, 3.0)  # From Villar
+    # # 1.4 + 2.0 NS
+    # _0425_red_kn_props_1 = (0.15, 0.039, 10.0)  # From Foley 0425
+    #
+    # # 1.6 + 1.6 NS
+    # _0425_red_kn_props_2 = (0.11, 0.020, 10.0)  # From Foley 0425
+
     # SSS17a - Blue KN
     #deepskyblue
-    e = ax.errorbar(0.25, 0.025, fmt="*", mfc="black", mec="white", ecolor="black",
-                    elinewidth=1.0, ms=24.0, zorder=9999, mew=1.5)
-    print("Prob of blue KN: %s" % griddata(points, values, (0.25, 0.025)))
+    # e = ax.errorbar(0.25, 0.025, fmt="*", mfc="black", mec="white", ecolor="black",
+    #                 elinewidth=1.0, ms=24.0, zorder=9999, mew=1.5)
+    # print("Prob of blue KN: %s" % griddata(points, values, (0.25, 0.025)))
 
-
-
-
-    # Test from Charlie
-    # ax.errorbar(0.15, 0.06, fmt="*", mfc="deepskyblue", mec="black", ms=24.0, zorder=9999, mew=1.5)
+    ax.errorbar(blue_kn_props[0], blue_kn_props[1], fmt="*", mfc="deepskyblue", mec="black", ms=24.0, zorder=9999, mew=1.5)
+    print("Prob of blue KN: %s" % griddata(points, values, (blue_kn_props[0], blue_kn_props[1])))
 
     if not is_poster_plot:
 
@@ -499,49 +582,58 @@ if blue_kn:
                 path_effects=[path_effects.withStroke(linewidth=2.0, foreground='black')])
 
 else:
+
     # An r-Process Kilonova Associated with the Short-Hard GRB 130603B
     # https://arxiv.org/abs/1306.3960
     # M
     # ej ≈ 0.03 - 0.08
     # M ☉ for v ej ≈ 0.1-0.3c.
 
-    e = ax.errorbar(0.2, 0.055, xerr=0.1, yerr=0.025, fmt="^", mfc="black", mec="white", ecolor="white", elinewidth=1.0,
-                    capsize=5.0, ms=18.0, zorder=9999, mew=1.5)  #
-
-    e[1][0].set_path_effects([path_effects.Stroke(linewidth=5.0, foreground="black"), path_effects.Normal()])
-    e[1][1].set_path_effects([path_effects.Stroke(linewidth=5.0, foreground="black"), path_effects.Normal()])
-    e[1][2].set_path_effects([path_effects.Stroke(linewidth=5.0, foreground="black"), path_effects.Normal()])
-    e[1][3].set_path_effects([path_effects.Stroke(linewidth=5.0, foreground="black"), path_effects.Normal()])
-
-    e[2][0].set_path_effects([path_effects.Stroke(linewidth=5.0, foreground="black"), path_effects.Normal()])
-    e[2][1].set_path_effects([path_effects.Stroke(linewidth=5.0, foreground="black"), path_effects.Normal()])
-
-    ax.text(0.31, 0.023, "GRB 130603B\nAfterglow Excess", fontsize=20, color="white",
-            ha="center", zorder=9999, path_effects=[path_effects.withStroke(linewidth=10.0, foreground='black')])
-
+#     e = ax.errorbar(0.2, 0.055, xerr=0.1, yerr=0.025, fmt="^", mfc="black", mec="white", ecolor="white", elinewidth=1.0,
+#                     capsize=5.0, ms=18.0, zorder=9999, mew=1.5)  #
+#
+#     e[1][0].set_path_effects([path_effects.Stroke(linewidth=5.0, foreground="black"), path_effects.Normal()])
+#     e[1][1].set_path_effects([path_effects.Stroke(linewidth=5.0, foreground="black"), path_effects.Normal()])
+#     e[1][2].set_path_effects([path_effects.Stroke(linewidth=5.0, foreground="black"), path_effects.Normal()])
+#     e[1][3].set_path_effects([path_effects.Stroke(linewidth=5.0, foreground="black"), path_effects.Normal()])
+#
+#     e[2][0].set_path_effects([path_effects.Stroke(linewidth=5.0, foreground="black"), path_effects.Normal()])
+#     e[2][1].set_path_effects([path_effects.Stroke(linewidth=5.0, foreground="black"), path_effects.Normal()])
+#
+#     ax.text(0.31, 0.023, "GRB 130603B\nAfterglow Excess", fontsize=20, color="white",
+#             ha="center", zorder=9999, path_effects=[path_effects.withStroke(linewidth=10.0, foreground='black')])
+#
     # SSS17a - Red KN
     # From Charlie's SSS17a paper:
     # A good description to the panchromatic data is obtained by summing a red kilonova component with
     # Mej = 0.035 ± 0.15 M⊙, vk = 0.15 ± 0.03 c, log(Xlan) = −2.0 ± 0.5,
-    e = ax.errorbar(0.15, 0.035, xerr=0.03, yerr=0.015, fmt="*", mfc="black", mec="white", ms=24.0, zorder=9999, mew=1.5,
-                    ecolor="white", elinewidth=1.0, capsize=5.0)
-    print("Prob of red KN: %s" % griddata(points, values, (0.15, 0.035)))
 
-    e[1][0].set_path_effects([path_effects.Stroke(linewidth=5.0, foreground="black"), path_effects.Normal()])
-    e[1][1].set_path_effects([path_effects.Stroke(linewidth=5.0, foreground="black"), path_effects.Normal()])
-    e[1][2].set_path_effects([path_effects.Stroke(linewidth=5.0, foreground="black"), path_effects.Normal()])
-    e[1][3].set_path_effects([path_effects.Stroke(linewidth=5.0, foreground="black"), path_effects.Normal()])
+    red_props_dict = red_props_dict[ye_thresh]
 
-    e[2][0].set_path_effects([path_effects.Stroke(linewidth=5.0, foreground="black"), path_effects.Normal()])
-    e[2][1].set_path_effects([path_effects.Stroke(linewidth=5.0, foreground="black"), path_effects.Normal()])
+    shift_factors = {
+        10.0: (1.45, 0.92),
+        3.65: (1.0, 0.55)
+    }
 
-    ax.text(0.17, 0.012, "AT 2017gfo-like\nRed Component", fontsize=20, ha="center", zorder=9999, color="white",
-            path_effects=[path_effects.withStroke(linewidth=10.0, foreground='black')])
-    # ax.text(0.17, 0.012, "SSS17a-like\nRed Component", fontsize=20, ha="center", zorder=9999, color="white",
-    #         path_effects = [path_effects.withStroke(linewidth=2.0, foreground='black')])
-    # path_effects = [path_effects.withStroke(linewidth=1.25, foreground='white')]
+    for text_str, red_model_tup in red_props_dict.items():
 
-# ax.grid(which='both', axis='both', linestyle=':', color="gray", zorder=1)
+        e = ax.errorbar(red_model_tup[0], red_model_tup[1], fmt="*", mfc="red", mec="white", ms=24.0, zorder=9999, mew=1.5,
+                        ecolor="white", elinewidth=1.0, capsize=5.0)
+
+        print("Prob of `[%s]`: %s" % (text_str, griddata(points, values, (red_model_tup[0], red_model_tup[1]))))
+
+        # e[1][0].set_path_effects([path_effects.Stroke(linewidth=5.0, foreground="black"), path_effects.Normal()])
+        # e[1][1].set_path_effects([path_effects.Stroke(linewidth=5.0, foreground="black"), path_effects.Normal()])
+        # e[1][2].set_path_effects([path_effects.Stroke(linewidth=5.0, foreground="black"), path_effects.Normal()])
+        # e[1][3].set_path_effects([path_effects.Stroke(linewidth=5.0, foreground="black"), path_effects.Normal()])
+        #
+        # e[2][0].set_path_effects([path_effects.Stroke(linewidth=5.0, foreground="black"), path_effects.Normal()])
+        # e[2][1].set_path_effects([path_effects.Stroke(linewidth=5.0, foreground="black"), path_effects.Normal()])
+
+        ax.text(red_model_tup[0]*shift_factors[ye_thresh][0], red_model_tup[1]*shift_factors[ye_thresh][1], text_str, fontsize=20, color="white",
+                # ax.text(0.23, 0.0135, "SSS17a-like\nBlue Component", fontsize=20, color="white",
+                ha="center", zorder=9999,
+                path_effects=[path_effects.withStroke(linewidth=10.0, foreground='black')])
 
 for axis in ['top', 'bottom', 'left', 'right']:
     ax.spines[axis].set_linewidth(2.0)
@@ -589,13 +681,13 @@ mej_max = 0.5
 # prob_fixed_n = _2d_func(fixed_n, log_yy)
 
 ## Get numbers for Charlie:
-prob1 = griddata(points, values, (vej_25, mej_max), method='linear', rescale=True)
-prob2 = griddata(points, values, (vej_25, mej_30), method='linear', rescale=True)
-prob3 = griddata(points, values, (vej_max, 0.025), method='linear', rescale=True)
-
-print(prob1)
-print(prob2)
-print(prob3)
+# prob1 = griddata(points, values, (vej_25, mej_max), method='linear', rescale=True)
+# prob2 = griddata(points, values, (vej_25, mej_30), method='linear', rescale=True)
+# prob3 = griddata(points, values, (vej_max, 0.025), method='linear', rescale=True)
+#
+# print(prob1)
+# print(prob2)
+# print(prob3)
 
 test = 1
 

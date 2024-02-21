@@ -43,6 +43,7 @@ from web.src.objects.Tile import *
 from web.src.objects.Pixel_Element import *
 from web.src.utilities.Database_Helpers import *
 from web.src.utilities.filesystem_utilties import *
+from web.src.utilities.HEALPix_Helpers import *
 from ligo.skymap.postprocess.util import find_greedy_credible_levels
 
 from configparser import RawConfigParser
@@ -95,6 +96,7 @@ class Teglon:
             "t": "THACHER",
             "n": "NICKEL",
             "t80": "T80S_T80S-Cam",
+            "nf": "NEWFIRM",
             "a": "All"
         }
 
@@ -103,13 +105,15 @@ class Teglon:
             "r": "SDSS r",
             "i": "SDSS i",
             "z": "SDSS z",
-            "I": "Landolt I"
+            "I": "Landolt I",
+            "J": "UKIRT J"
         }
 
         default_settings = {
             "SWOPE": "r",
             "THACHER": "r",
             "NICKEL": "r",
+            "NEWFIRM": "J",
             "T80S_T80S-Cam": "I",
         }
 
@@ -505,6 +509,7 @@ class Teglon:
             "t": "THACHER",
             "n": "NICKEL",
             "t80": "T80S_T80S-Cam",
+            "nf": "NEWFIRM",
             "a": "All"
         }
 
@@ -513,6 +518,7 @@ class Teglon:
             "THACHER": EarthLocation(lat=34.46479 * u.deg, lon=-121.6431 * u.deg, height=630.0 * u.m),
             "NICKEL": EarthLocation(lat=37.3414 * u.deg, lon=-121.6429 * u.deg, height=1283 * u.m),
             "T80S_T80S-Cam": EarthLocation(lat=-70.8035 * u.deg, lon=-70.8035 * u.deg, height=2207.0 * u.m),
+            "NEWFIRM": EarthLocation(lat=-30.16967 * u.deg, lon=70.80653 * u.deg, height=2207.0 * u.m),
         }
 
         band_mapping = {
@@ -520,7 +526,8 @@ class Teglon:
             "r": "SDSS r",
             "i": "SDSS i",
             "z": "SDSS z",
-            "I": "Landolt I"
+            "I": "Landolt I",
+            "J": "UKIRT J"
         }
 
         # Parameter checks
@@ -571,10 +578,9 @@ class Teglon:
         if plot_all:
             fig, ((ax1, ax2), (ax3, ax4), (ax5, ax6)) = plt.subplots(3, 2,
                                                                      subplot_kw={'projection': 'astro hours mollweide'})
-            fig.delaxes(ax6)
             plt.tight_layout()
 
-            ax_list += [ax1, ax2, ax3, ax4, ax5]
+            ax_list += [ax1, ax2, ax3, ax4, ax5, ax6]
 
             for i, (detector_name, tile_file) in enumerate(tile_files.items()):
                 _ax = ax_list[i]
@@ -765,7 +771,7 @@ class Teglon:
         print("... Done.")
 
     def load_map(self, gw_id, healpix_dir='./web/events/{GWID}', healpix_file="bayestar.fits.gz", analysis_mode=False,
-                 clobber=False, skip_swope=False, skip_thacher=False, skip_t80=False):
+                 clobber=False, skip_swope=False, skip_thacher=False, skip_t80=False, skip_newfirm=False):
 
         api_endpoint = "https://gracedb.ligo.org/api/"
         utilities_base_dir = "/app/web/src/utilities"
@@ -1518,6 +1524,68 @@ class Teglon:
 
                 # Insert Tile/Healpix pixel relations
                 for t in initialized_t80_tiles:
+                    for p in t.enclosed_pixel_indices:
+                        if p in map_pixel_dict:
+                            tile_pixel_data.append((t.id, map_pixel_dict[p][0], healpix_map_id))
+
+                # Append to existing CSV, upload, and clean up CSV
+                try:
+                    t1 = time.time()
+                    print("Appending `%s`" % tile_pixel_upload_csv)
+                    with open(tile_pixel_upload_csv, 'a') as csvfile:
+                        csvwriter = csv.writer(csvfile)
+                        for data in tile_pixel_data:
+                            csvwriter.writerow(data)
+
+                    t2 = time.time()
+                    print("\n********* start DEBUG ***********")
+                    print("Tile-Pixel CSV append execution time: %s" % (t2 - t1))
+                    print("********* end DEBUG ***********\n")
+                except Error as e:
+                    print("Error in creating Tile-Pixel CSV:\n")
+                    print(e)
+                    print("\nExiting")
+                    return 1
+
+            tile_pixel_data = []
+            if not skip_newfirm:
+                ##### DO NEWFIRM ######
+                # Get detector -> static tile rows
+                newfirm_detector_result = query_db([select_detector % "NEWFIRM"])[0][0]
+                newfirm_id = newfirm_detector_result[0]
+                newfirm_name = newfirm_detector_result[1]
+                newfirm_poly = newfirm_detector_result[2]
+                newfirm_detector_vertices = Detector.get_detector_vertices_from_teglon_db(newfirm_poly)
+                newfirm_detector = Detector(newfirm_name, newfirm_detector_vertices, detector_id=newfirm_id)
+                newfirm_static_tile_rows = query_db([tile_select % newfirm_id])[0]
+
+                newfirm_tiles = []
+                for r in newfirm_static_tile_rows:
+                    t = Tile(central_ra_deg=float(r[3]), central_dec_deg=float(r[4]), detector=newfirm_detector,
+                             nside=map_nside, tile_id=int(r[0]), tile_mwe=float(r[7]))
+                    newfirm_tiles.append(t)
+
+                # clean up
+                print("freeing `newfirm_static_tile_rows`...")
+                del newfirm_static_tile_rows
+
+                t1 = time.time()
+                initialized_newfirm_tiles = None
+                # with mp.Pool() as pool:
+                with Pool() as pool:
+                    initialized_newfirm_tiles = pool.map(initialize_tile, newfirm_tiles)
+
+                # clean up
+                print("freeing `newfirm_tiles`...")
+                del newfirm_tiles
+                t2 = time.time()
+
+                print("\n********* start DEBUG ***********")
+                print("NEWFIRM Tile initialization execution time: %s" % (t2 - t1))
+                print("********* end DEBUG ***********\n")
+
+                # Insert Tile/Healpix pixel relations
+                for t in initialized_newfirm_tiles:
                     for p in t.enclosed_pixel_indices:
                         if p in map_pixel_dict:
                             tile_pixel_data.append((t.id, map_pixel_dict[p][0], healpix_map_id))
@@ -2394,3 +2462,109 @@ class Teglon:
         else:
             raise ("Error with INSERT! Exiting...")
         print("...Done")
+
+    def generate_static_grid_inserts(self, teglon_detector_id, detector_prefix, ebv_dict, skypixel_dict):
+
+        detector_select = '''
+                SELECT
+                    Name, ST_AsText(Poly), Deg_width,
+                    Deg_height, id, MinDec, MaxDec
+                FROM Detector
+                WHERE 
+                    id = '%s'
+                '''
+        detector_result = query_db([detector_select % (teglon_detector_id)])[0][0]
+        detector_name = detector_result[0]
+
+        static_grid_nside = 128
+        insert_static_tile = '''INSERT INTO StaticTile (Detector_id, FieldName, RA, _Dec, Coord, Poly, EBV, N128_SkyPixel_id) 
+                    VALUES (%s, %s, %s, %s, ST_PointFromText(%s, 4326), ST_GEOMFROMTEXT(%s, 4326), %s, %s)'''
+
+        tiles = []
+
+        print("Building `%s` coordinate grid ..." % detector_name)
+        # detector_result = query_db([select_detect % detector_name])[0][0]
+        detector_vertices = Detector.get_detector_vertices_from_teglon_db(detector_result[1])
+        detector_id = int(detector_result[4])
+        detector_min_dec = float(detector_result[5])
+        detector_max_dec = float(detector_result[6])
+        detector = Detector(detector_name=detector_name, detector_vertex_list_collection=detector_vertices,
+                         detector_width_deg=detector_result[2], detector_height_deg=detector_result[3],
+                         detector_id=detector_id)
+
+        t1 = time.time()
+        allsky_detector_coords = Cartographer.generate_all_sky_coords(detector)
+        t2 = time.time()
+        print("\n********* start DEBUG ***********")
+        print("`%s` Coordinate grid creation - execution time: %s" % (detector_name, (t2 - t1)))
+        print("********* end DEBUG ***********\n")
+
+        print("Building `%s` tiles ..." % detector_name)
+        t1 = time.time()
+        for i, c in enumerate(allsky_detector_coords):
+            # only include pointings that the telescope can reach
+            if c[1] >= detector_min_dec and c[1] <= detector_max_dec:
+                t = Tile(c[0], c[1], detector, static_grid_nside)
+                t.field_name = "{detector_prefix}{field_number}".format(detector_prefix=detector_prefix,
+                                                                        field_number=str(i).zfill(6))
+                # Sanity - due to discretization err, sometimes (0.5 * np.pi - t.dec_rad) < 0. If this is the case, set to 0
+                # theta = 0.5 * np.pi - t.dec_rad
+                # if theta < 0:
+                #     theta = 0.0
+                n128_index = hp.ang2pix(static_grid_nside, 0.5 * np.pi - t.dec_rad, t.ra_rad)  # theta, phi
+                t.mwe = ebv_dict[n128_index]
+                # HACK: DC - this is overloaded... the `id` is for the Tile id, but the N128_Pixel_id is put here for convenience
+                t.id = skypixel_dict[static_grid_nside][n128_index].id
+                tiles.append(t)
+
+        t2 = time.time()
+        print("\n********* start DEBUG ***********")
+        print("`%s` tile creation - execution time: %s" % (detector_name, (t2 - t1)))
+        print("********* end DEBUG ***********\n")
+
+        print("Building INSERTS for all static tiles ...")
+        static_tile_data = []
+        for t in tiles:
+            static_tile_data.append((t.detector.id,
+                                     t.field_name,
+                                     float(t.ra_deg),
+                                     float(t.dec_deg),
+                                     "POINT(%s %s)" % (t.dec_deg, t.ra_deg - 180.0),
+                                     # Dec, RA order due to MySQL convention for lat/lon
+                                     t.query_polygon_string,
+                                     str(t.mwe),
+                                     t.id) # HACK: DC - this is overloaded... the `id` is for the Tile id, but the N128_Pixel_id is put here for convenience
+                                    )
+
+        print("INSERTing all static tiles ...")
+        batch_insert(insert_static_tile, static_tile_data)
+
+    def add_static_grid(self, teglon_detector_id, detector_prefix):
+
+        utilities_base_dir = "/app/web/src/utilities"
+        pickle_output_dir = "%s/pickles/" % utilities_base_dir
+
+        ebv = None
+        print("\tLoading EBV...")
+        if os.path.exists(pickle_output_dir + 'ebv.pkl'):
+            with open(pickle_output_dir + 'ebv.pkl', 'rb') as handle:
+                ebv = pickle.load(handle)
+        else:
+            raise Exception("EBV pickle does exist! Exiting...")
+
+        sky_pixels = None
+        print("\tLoading existing pixels...")
+        if os.path.exists(pickle_output_dir + "sky_pixels.pkl"):
+            with open(pickle_output_dir + "sky_pixels.pkl", 'rb') as handle:
+                sky_pixels = pickle.load(handle)
+
+        print("Building Static Grids...")
+
+        t1 = time.time()
+        self.generate_static_grid_inserts(teglon_detector_id=teglon_detector_id, detector_prefix=detector_prefix,
+                                          ebv_dict=ebv, skypixel_dict=sky_pixels)
+        t2 = time.time()
+
+        print("\n********* start DEBUG ***********")
+        print("Static Tile Creation - execution time: %s" % (t2 - t1))
+        print("********* end DEBUG ***********\n")

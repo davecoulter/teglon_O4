@@ -18,11 +18,11 @@ if __name__ == "__main__":
                       help='Healpix filename. Default `bayestar.fits.gz`.')
     parser.add_argument('--tele', default="a", type=str,
                       help='''Telescope abbreviation for the telescope to extract files for. Default: `a`.
-                      Available: (s:Swope, t:Thacher, n:Nickel, t80: T80S_T80S-Cam, a:All). If `All` selected,
-                      combination plot is generated (vs single plot).''')
+                      Available: (s:Swope, t:Thacher, n:Nickel, t80: T80S_T80S-Cam, nf:NEWFIRM, a:All). If `All`
+                       selected, combination plot is generated (vs single plot).''')
     parser.add_argument('--band', default="r", type=str,
                       help='''Only used when plotting single telescope, otherwise defaults per telescope are used.
-                           For single telescope, default: `r`. Available: (g, r, i, z, I)''')
+                           For single telescope, default: `r`. Available: (g, r, i, z, I, J)''')
     parser.add_argument('--extinct', default=0.5, type=float,
                       help='''Extinction in mags in the specified band to be less than.
                       Default: 0.5 mag. Must be > 0.0''')
