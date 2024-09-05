@@ -2568,3 +2568,38 @@ class Teglon:
         print("\n********* start DEBUG ***********")
         print("Static Tile Creation - execution time: %s" % (t2 - t1))
         print("********* end DEBUG ***********\n")
+
+    def upload_pointings_tm(self, tm_detector_id, teglon_detector_id, healpix_map_id):
+
+        treasure_map_detectors = None
+        tm_api_token = None
+        tm_base_url = None
+
+        # Sanity
+        is_error = False
+        try:
+            tm_api_token = self.config.get('treasuremap', 'TM_API_TOKEN')
+            tm_base_url = self.config.get('treasuremap', 'TM_ENDPOINT')
+        except:
+            print("Error! No Treasure Map keys (`TM_API_TOKEN`, `TM_ENDPOINT`) in the Settings.ini file!")
+            is_error = True
+
+        if not any(tm_api_token) or not any(tm_base_url):
+            print("Can't load TM detectors with API keys or API endpoints!")
+            is_error = True
+
+        if tm_detector_id is None:
+            print("Error! You must provide a correct TM Detector Id!")
+            is_error = True
+
+        if teglon_detector_id is None:
+            print("Error! You must provide a correct TM Detector Id!")
+            is_error = True
+
+        if healpix_map_id is None:
+            print("Error! You must provide a HealpixM")
+            is_error = True
+
+        if is_error:
+            print("Exiting...")
+            return 1

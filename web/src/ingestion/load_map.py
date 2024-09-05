@@ -27,6 +27,8 @@ if __name__ == "__main__":
                       help='''Do not register Thacher tiles for this map (Default = False)''')
     parser.add_argument('--skip_t80', action="store_true", default=False,
                       help='''Do not register T80S_T80S-Cam tiles for this map (Default = False)''')
+    parser.add_argument('--skip_newfirm', action="store_true", default=False,
+                        help='''Do not register NEWFIRM tiles for this map (Default = False)''')
 
     args = parser.parse_args()
     teglon.load_map(**vars(args))
