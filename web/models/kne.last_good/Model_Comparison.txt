@@ -1,0 +1,37 @@
+Closest Match - Metzger - Using Villar fits
+
+Red
+teglon_script_arm64  | 0.08906785294041683
+teglon_script_arm64  | [0.14344827586206896, 0.010562026262441078, 0.1]
+teglon_script_arm64  | 12
+
+red_kn_props = (0.14, 0.011, 10.0) # From Villar
+
+Blue
+teglon_script_arm64  | 0.4300112082868954
+teglon_script_arm64  | [0.2731034482758621, 0.02008866315339448, 0.45]
+teglon_script_arm64  | 11
+
+
+
+Closest Match - Metzger - Using Kilptrick fits
+
+teglon_script_arm64  | Red
+teglon_script_arm64  | 0.06540807786148291
+teglon_script_arm64  | [0.14344827586206896, 0.038208046189546235, 0.1]
+teglon_script_arm64  | 4
+
+
+teglon_script_arm64  | Blue
+teglon_script_arm64  | 0.42505596643330684
+teglon_script_arm64  | [0.25689655172413794, 0.024889660212162802, 0.45]
+teglon_script_arm64  | 8
+
+
+
+
+***
+red_kn_props = (0.15, 0.035, 10.0) # From Kilpatrick
+# red_kn_props = (0.14, 0.011, 10.0) # From Villar
+blue_kn_props = (0.25, 0.025, 1.0)  # vej, mej, Kappa, From Kilpatrick
+# blue_kn_props = (0.27, 0.020, 1.0)  # From Villar
