@@ -36,7 +36,7 @@ def get_B_luminosity_proxy(b_mag, z_dist):
     proxy = (z_dist**2)*(10.0**(-0.4*b_mag))
     return proxy
 
-transform_GLADE = False
+transform_GLADE = True
 if transform_GLADE:
     print("Processing GLADE catalog...")
     if os.path.exists(glade_catalog_mid):
