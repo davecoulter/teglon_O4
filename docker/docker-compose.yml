@@ -29,8 +29,8 @@ services:
       container_name: teglon_script_arm64
 #      platform: linux/amd64
       build: ./teglon_worker
-#      image: "ghcr.io/davecoulter/teglon_o4:latest"
-      image: "test_teglon:0.0.2"
+      image: "ghcr.io/davecoulter/teglon_o4:latest"
+#      image: "test_teglon:0.0.2"
       mem_limit: ${MEM_LIMIT}
       cpus: ${CPU_LIMIT}
       volumes:
