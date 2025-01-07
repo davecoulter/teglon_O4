@@ -13,3 +13,8 @@ TM_ENDPOINT: https://treasuremap.space/api/v1
 API_ENDPOINT: https://gracedb.ligo.org/api/
 
 # DATABASE_PASSWORD is a debug pwd, should match teglon_users.sql. Change for production use!
+
+[cosmology]
+H0: 70
+OMEGA_M: 0.3
+OMEGA_DE: 0.7
