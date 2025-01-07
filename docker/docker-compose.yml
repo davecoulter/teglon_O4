@@ -10,7 +10,7 @@ services:
             - ${VOL_DB}:/var/lib/mysql
             - ./db_init/db_configuration:/etc/mysql/conf.d
             - ./db_init/init.sql:/docker-entrypoint-initdb.d/1.sql
-            - ./db_init/teglon_O4.sql:/docker-entrypoint-initdb.d/2.sql
+            - ./db_init/teglon_schema_20231116.sql:/docker-entrypoint-initdb.d/2.sql
             - ./db_init/angsep.sql:/docker-entrypoint-initdb.d/3.sql
             - ./db_init/backup_tables.sql:/docker-entrypoint-initdb.d/4.sql
             - ./db_init/delete_map.sql:/docker-entrypoint-initdb.d/5.sql
