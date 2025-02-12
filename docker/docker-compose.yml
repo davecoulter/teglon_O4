@@ -27,7 +27,7 @@ services:
           - teglon_net
     gw_script:
       container_name: teglon_script_arm64
-#      platform: linux/amd64
+      platform: linux/amd64
       build: ./teglon_worker
       image: "ghcr.io/davecoulter/teglon_o4:latest"
 #      image: "test_teglon:0.0.2"

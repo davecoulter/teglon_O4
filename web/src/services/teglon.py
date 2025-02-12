@@ -711,6 +711,33 @@ class Teglon:
                                   net_prob=prob) for ra, dec, prob in zip(tiles["RA"], tiles["Dec"], tiles["Prob"])]
 
             if len(tiles_to_plot) > 0:
+
+                # Hack
+                # circle = Detector.get_detector_vertices_circular(deg_radius=0.43)
+                # circle_grb = Detector.get_detector_vertices_circular(deg_radius=0.2)
+                # square = Detector.get_detector_vertices_rectangular(deg_width=0.86, deg_height=0.86)
+                #
+                # circle_detector = Detector(detector_name="Circle", detector_vertex_list_collection=circle)
+                # circle_detector_grb = Detector(detector_name="Circle", detector_vertex_list_collection=circle_grb)
+                #
+                #
+                # square_detector = Detector(detector_name="Square", detector_vertex_list_collection=square)
+                #
+                # circle_tile = Tile(central_ra_deg=149.16, central_dec_deg=-17.94, detector=circle_detector,
+                #                     nside=256,
+                #                     position_angle_deg=0.0)
+                #
+                # circle_tile_grb = Tile(central_ra_deg=16.0892, central_dec_deg=-12.1633, detector=circle_detector_grb,
+                #                    nside=256,
+                #                    position_angle_deg=0.0)
+                # # square_tile = Tile(central_ra_deg=149.16, central_dec_deg=-17.94, detector=square_detector,
+                # #                     nside=healpix_map_nside, position_angle_deg=0.0)
+                #
+                # circle_tile.plot2(plot_ax, edgecolor='b', facecolor='None', linestyle='-')
+                # circle_tile_grb.plot2(plot_ax, edgecolor='magenta', facecolor='None', linestyle='-')
+                # # square_tile.plot2(plot_ax, edgecolor='b', facecolor='None', linestyle='-')
+                # End Hack
+
                 min_prob = np.min(tiles["Prob"])
                 max_prob = np.max(tiles["Prob"])
                 print("min prob for `%s`: %s" % (detector_name, min_prob))
@@ -718,9 +745,18 @@ class Teglon:
                 clr_norm = colors.LogNorm(min_prob, max_prob)
                 for i, t in enumerate(tiles_to_plot[0:num_tiles]):
                     if t.ra_deg < 358 and t.ra_deg > 2:
+
+                        # Hack
+                        # square_tile = Tile(central_ra_deg=t.ra_deg, central_dec_deg=t.dec_deg, detector=square_detector,
+                        #                     nside=healpix_map_nside, position_angle_deg=0.0)
+                        # square_tile.plot2(plot_ax, edgecolor='g', facecolor='None', linestyle='-', alpha=0.25)
+                        # End Hack
+
                         t.plot2(plot_ax, edgecolor='k',
                                 facecolor=plt.cm.Greens(clr_norm(t.net_prob)),
                                 linewidth=0.05, alpha=1.0, zorder=9999)
+
+
 
             # Sun Contours
             try:
